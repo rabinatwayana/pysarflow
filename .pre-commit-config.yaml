@@ -32,6 +32,12 @@ repos:
       - id: commitizen
         stages: [commit-msg]
 
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.1.0  # or latest
+    hooks:
+      - id: flake8
+        additional_dependencies: [flake8-docstrings]
+
 ci:
     autofix_commit_msg: |
         [pre-commit.ci] auto fixes from pre-commit.com hooks
