@@ -13,7 +13,7 @@ Despite the growing usage of SAR data, the processing workflow remains complex a
 ## Project Structure
 
 ```graphql
-nickyspatial/
+pysarflow/
 ├── __init__.py
 ├── grd.py
 ├── slc.py
