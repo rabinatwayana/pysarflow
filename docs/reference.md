@@ -1,8 +1,10 @@
 # API Reference
 
-::: nickyspatial
+<!-- ::: pysarflow -->
 
 ## `pysarflow`
+
+::: pysarflow
 
 ::: pysarflow.grd
 

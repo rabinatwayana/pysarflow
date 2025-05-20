@@ -1,6 +1,6 @@
-# NickySpatial
+# pysarflow
 
-An open-source object-based image analysis library for remote sensing.
+An open-source python library for SAR data processing 
 
 > [!WARNING]
 > This library is under active development and lot of its functionality is still yet to code.

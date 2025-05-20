@@ -1,7 +1,7 @@
 
 site_name: pysarflow
 site_description: An open-source object-based image analysis library for remote sensing
-site_url: https://rabinatwayana.github.io/pysarflow
+site_url: https://rabinatwayana.github.io/pysarflow/
 repo_url: https://github.com/rabinatwayana/pysarflow/
 repo_name: rabinatwayana/pysarflow
 theme:
@@ -56,10 +56,11 @@ plugins:
               show_submodules: true
 
 nav :
- - Home: index.md
- - Package Reference: reference.md
- - Contribute:
-    - Installation: dev.md
+ - Home: home.md
+ - Reference: reference.md
+ - Contribute: dev.md
  - Examples:
     - SLC: examples/slc_pipeline.ipynb
     - GRD: examples/grd_pipeline.ipynb
+
+theme: readthedocs

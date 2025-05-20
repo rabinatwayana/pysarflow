@@ -3,3 +3,4 @@ self.txt
 __pycache__/
 pysarflow.egg-info/
 .ruff_cache
+site/
