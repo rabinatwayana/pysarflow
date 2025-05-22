@@ -4,7 +4,7 @@
 
 ## `pysarflow`
 
-::: pysarflow
+<!-- ::: pysarflow -->
 
 ::: pysarflow.grd
 

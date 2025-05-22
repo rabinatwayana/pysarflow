@@ -56,7 +56,7 @@ plugins:
               show_submodules: true
 
 nav :
- - Home: home.md
+ - Home: index.md
  - Reference: reference.md
  - Contribute: dev.md
  - Examples:
