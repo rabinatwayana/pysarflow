@@ -20,6 +20,13 @@ import hvplot.pandas
 
 from .utils_grd import items_to_geodataframe
 
+import os
+import rioxarray
+import xarray as xr
+import zipfile
+from pathlib import Path
+
+
 def sum_grd(a, b):
     """Dockstring here."""
     return a + b
@@ -116,3 +123,73 @@ class Sentinel1GRDProcessor:
 
         self.df_properties = pd.DataFrame(item_properties)
         self.df_assets = pd.DataFrame(item_assets)
+
+
+    def read_grd_data(self, safe_path, extract_to):
+        """
+        Loads Sentinel-1 GRD SAR data into an xarray Dataset.
+
+        Parameters:
+        -----------
+        safe_path (str or Path): Path to the .SAFE folder or .zip file
+        extract_to (str or Path): Directory to extract zip file contents to; 
+                                 for windows: the Sentinel safe file already 
+                                 has really long name so a short file path recommended i.e. 'C:\Temp'
+
+        Returns:
+        --------
+        xarray.Dataset
+        """
+        safe_path = Path(safe_path)
+
+        # If input is a ZIP file, extract it to your desired directory 
+        # 
+        if safe_path.suffix.lower() == ".zip":
+            print(f"Extracting zip file: {safe_path}")
+            extract_dir = Path(extract_to)
+            extract_dir.mkdir(exist_ok=True)
+            
+            # extract the zip file
+            with zipfile.ZipFile(safe_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+
+            safe_dirs = [d for d in os.listdir(extract_dir) if d.endswith(".SAFE") and (extract_dir / d).is_dir()]
+            if not safe_dirs:
+                raise FileNotFoundError(f"No .SAFE folder found inside extracted contents of {safe_path}")
+            safe_folder_path = extract_dir / safe_dirs[0]
+        else:
+            # If not a ZIP, treat safe_path as the .SAFE directory itself
+            safe_folder_path = safe_path
+
+        # Check if 'measurement' subdirectory exists; where GeoTIFF files are stored
+        measurement_path = safe_folder_path / "measurement"
+        if not measurement_path.exists():
+            raise FileNotFoundError(f"'measurement' folder not found inside {safe_folder_path}")
+
+        tiff_files = [f for f in os.listdir(measurement_path) if f.lower().endswith((".tif", ".tiff"))]
+        if not tiff_files:
+            raise FileNotFoundError(f"No GeoTIFF files found in 'measurement' folder of {safe_folder_path}")
+
+        data_vars = {}
+
+        for tiff in tiff_files:
+            pols = ["vv", "vh", "hh", "hv"]
+            band_name = None
+            for pol in pols:
+                if pol in tiff.lower():
+                    band_name = pol.upper()
+                    break
+            if not band_name:
+                raise ValueError(f"Polarization not found in filename: {tiff}")
+
+            tiff_path = measurement_path / tiff
+            print(f"Loading band {band_name} from {tiff_path}")
+            da = rioxarray.open_rasterio(tiff_path)
+            if "band" in da.dims and len(da.band) == 1:
+                da = da.squeeze("band", drop=True)
+            data_vars[band_name] = da
+
+        ds = xr.Dataset(data_vars)
+        print("Sentinel-1 data loaded successfully")
+        return ds
+
