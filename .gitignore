@@ -4,3 +4,4 @@ __pycache__/
 pysarflow.egg-info/
 .ruff_cache
 site/
+.DS_Store
