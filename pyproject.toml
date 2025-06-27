@@ -30,6 +30,7 @@ dependencies = [
     "mkdocs-git-revision-date-localized-plugin>=1.4.5",
     "mkdocstrings>=0.29.1",
     "mkdocstrings-python>=1.16.10",
+    "pyrosar==0.30.0",
     "pystac-client>=0.8.6",
     "matplotlib>=3.10.3",
     "stackstac>=0.5.1",
@@ -38,7 +39,8 @@ dependencies = [
     "pandas>=2.2.3",
     "hvplot>=0.11.3",
     "rioxarray>=0.19.0",
-    "geopandas>=1.1.0"
+    "geopandas>=1.1.0",
+    "eofs>=2.0.0",
 ]
 
 [project.urls]
