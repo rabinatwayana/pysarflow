@@ -18,7 +18,7 @@ import rioxarray
 import odc.stac
 import hvplot.pandas
 
-from .utils_grd import items_to_geodataframe
+from .utils_grd import items_to_geodataframe, apply_correction
 
 import os
 import xarray as xr
@@ -382,3 +382,53 @@ class Sentinel1GRDProcessor:
         )
 
         return ds
+    
+    def remove_thermal_noise(self, ds, lut_ds):
+
+        """
+        Removes thermal noise from Sentinel-1 SAR GRD data using a provided lookup table (LUT).
+
+        This function applies thermal noise correction to each band in the input dataset
+        using the specified LUT dataset. 
+        
+        It relies on a function "apply_correction" with the correction type set to "thermal_noise_removal".
+
+        Args:
+            ds (xarray.Dataset): The input dataset containing one or more polarization bands 
+                (e.g., 'VV', 'VH') as data variables which is result of function "load_sentinel1_data".
+            lut_ds (xarray.Dataset or dict): The thermal noise lookup table used for correction, 
+                which is the result of function "parse_thermal_noise_removal_lut".
+
+        Returns:
+            xarray.Dataset: A dataset with thermal noise removed from each polarization band.
+        """
+
+        result=apply_correction("thermal_noise_removal",ds, lut_ds)
+        print("Thermal noise removed successfully")
+        return result
+
+
+    def radiometric_calibration(self, ds, lut_ds):
+        """
+        Perform radiometric calibration of Sentinel-1 SAR GRD data using a provided lookup table (LUT).
+
+        This function applies radiometric calibration to each band in the input dataset
+        using the specified LUT dataset. 
+        
+        It relies on a function "apply_correction" with the correction type set to "radiometric_calibration".
+
+        Args:
+            ds (xarray.Dataset): The input dataset containing one or more polarization bands 
+                (e.g., 'VV', 'VH') as data variables which is result of function "load_sentinel1_data".
+            lut_ds (xarray.Dataset or dict): The thermal noise lookup table used for correction, 
+                which is the result of function "parse_radiometric_calibration_lut".
+
+        Returns:
+            xarray.Dataset: A dataset with thermal noise removed from each polarization band.
+        """
+
+        result= apply_correction("radiometric_calibration", ds, lut_ds)
+        print("Radiometric calibration completed successfully")
+        return result
+
+        
