@@ -14,7 +14,7 @@ Modules:
 
 """
 
-from .grd import sum_grd, Sentinel1GRDProcessor
+from .grd import Sentinel1GRDProcessor
 from .slc import sum_slc
 # from .utils_grd import items_to_geodataframe
 
