@@ -6,3 +6,4 @@ pysarflow.egg-info/
 site/
 ethel_temp/
 .DS_Store
+docs/data/

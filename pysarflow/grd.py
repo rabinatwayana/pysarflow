@@ -18,7 +18,7 @@ import rioxarray
 import odc.stac
 import hvplot.pandas
 
-from .utils_grd import items_to_geodataframe, apply_correction
+from .utils_grd import items_to_geodataframe, apply_correction, parse_radiometric_calibration_lut,parse_thermal_noise_removal_lut
 
 import os
 import xarray as xr
@@ -27,12 +27,6 @@ import xml.etree.ElementTree as ET
 
 from pathlib import Path
 from .utils_grd import download_orbit_file, update_annotations_orbit, add_precise_orbit_coords
-
-
-def sum_grd(a, b):
-    """Dockstring here."""
-    return a + b
-
 
 class Sentinel1GRDProcessor:
     """
@@ -127,7 +121,7 @@ class Sentinel1GRDProcessor:
         self.df_assets = pd.DataFrame(item_assets)
 
    
-    def read_grd_data(self, safe_path, extract_to):
+    def read_grd_data(self, safe_path, extract_to=None):
         """
         Loads Sentinel-1 GRD SAR data from a SAFE folder or ZIP file into an xarray dataset,
         and adds the acquisition start time from annotation XML as a 'time' coordinate and attribute.
@@ -226,7 +220,7 @@ class Sentinel1GRDProcessor:
         # Assign start time as coordinate and attribute
         ds = ds.assign_coords(time=[start_time])
         ds.attrs["startTime"] = start_time.isoformat()
-
+        print("Data loaded successfully")
         return ds
 
     def apply_orbit_file(self, ds, safe_folder_path, save_dir, overwrite=True):
@@ -251,7 +245,7 @@ class Sentinel1GRDProcessor:
         return add_precise_orbit_coords(ds, first_annotation)
 
     
-    def remove_thermal_noise(self, ds, lut_ds):
+    def remove_thermal_noise(self, safe_folder,ds):
 
         """
         Removes thermal noise from Sentinel-1 SAR GRD data using a provided lookup table (LUT).
@@ -270,13 +264,13 @@ class Sentinel1GRDProcessor:
         Returns:
             xarray.Dataset: A dataset with thermal noise removed from each polarization band.
         """
-
-        result=apply_correction("thermal_noise_removal",ds, lut_ds)
+        thermal_lut_ds=parse_thermal_noise_removal_lut(safe_folder)
+        result=apply_correction("thermal_noise_removal",ds, thermal_lut_ds)
         print("Thermal noise removed successfully")
         return result
 
 
-    def radiometric_calibration(self, ds, lut_ds):
+    def radiometric_calibration(self,safe_folder, ds, representation_type="sigmaNought"):
         """
         Perform radiometric calibration of Sentinel-1 SAR GRD data using a provided lookup table (LUT).
 
@@ -294,8 +288,8 @@ class Sentinel1GRDProcessor:
         Returns:
             xarray.Dataset: A dataset with thermal noise removed from each polarization band.
         """
-
-        result= apply_correction("radiometric_calibration", ds, lut_ds)
+        sigma_nought_lut=parse_radiometric_calibration_lut(safe_folder, representation_type)
+        result= apply_correction("radiometric_calibration", ds, sigma_nought_lut)
         print("Radiometric calibration completed successfully")
         return result
 
