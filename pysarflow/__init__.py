@@ -16,6 +16,6 @@ Modules:
 
 from .grd import Sentinel1GRDProcessor
 from .slc import sum_slc
-# from .utils_grd import items_to_geodataframe
+from .utils_grd import parse_beta_lut
 
 __all__ = ["sum_grd", "sum_slc"]

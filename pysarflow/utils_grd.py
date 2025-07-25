@@ -262,20 +262,111 @@ def parse_radiometric_calibration_lut(safe_folder_path, representation_type="sig
         lines = []
         pixels = None
         correction_values = []
+        azimuth_times=[]
 
         for calib_vec in root.findall('.//calibrationVector'):
             line = int(calib_vec.find('line').text)
             pixel_str = calib_vec.find('pixel').text.strip()
             value_str = calib_vec.find(representation_type).text.strip()
+            # azimuth_time = calib_vec.find('azimuthTime').text
 
             pixels = [int(x) for x in pixel_str.split()]
             values = [float(x) for x in value_str.split()]
 
             lines.append(line)
             correction_values.append(values)
+            # azimuth_times.append(azimuth_time)
 
         beta_array = np.array(correction_values)
         lut = xr.DataArray(beta_array, coords={"line": lines, "pixel": pixels}, dims=["line", "pixel"])
+        
+        lut_dict[band_name]= lut    
+    lut_ds = xr.Dataset(lut_dict)
+    print("Radiometric calibration LUT created successfully")
+    return lut_ds
+
+
+
+def parse_beta_lut(safe_folder_path, representation_type="betaNought"):
+    """
+    Parsing LUT for radiometric calibration bt reading the calibration xml files.
+
+    This function reads calibration related XML files within the 'annotation/calibration' folder in the
+    provided SAFE directory path,
+    and returns an xarray.Dataset with LUT for available polarizations based on the representation type as required.
+
+    Arguments:
+        safe_folder_path (str): Path to the root directory of the Sentinel-1 SAFE format product.
+        representation_type (str, optional): Type of backscatter representation to be used. 
+        Options are:
+            - 'sigmaNought' (default)
+            - 'betaNought'
+            - 'gamma'
+
+    Returns:
+        xarray.Dataset: A dataset containing the LUT for radiometric calibration for available polarizations
+        (e.g., 'VV', 'VH')
+
+    Raises Exception:
+        Exception: representation_type is not valid
+        FileNotFoundError: If the 'calibration' folder or required XML files are missing,
+    """
+
+    supporting_representation_types=["sigmaNought","betaNought","gamma"]
+    if representation_type not in supporting_representation_types:
+        raise Exception(f"representation_type {representation_type} is not supported. Supporting types are {supporting_representation_types}")
+
+    calibration_path = os.path.join(safe_folder_path, "annotation/calibration/")
+    if not os.path.exists(calibration_path):
+        raise FileNotFoundError(f"'calibration' folder not found inside {safe_folder_path}")
+
+    # Find XML files starting with 's1a-iw-grd' (case insensitive)
+    xml_files = [f for f in os.listdir(calibration_path) if f.lower().startswith('calibration') and f.lower().endswith('.xml')]
+    if not xml_files:
+        raise FileNotFoundError("No suitable calibration XML files found in 'calibration' folder")
+    lut_dict={}
+    for xml_file in xml_files:
+
+        polarizations = ["vv", "vh", "hh", "hv"]
+        band_name = None
+        for pol in polarizations:
+            if pol in xml_file.lower():
+                band_name = pol.upper()
+                break
+
+        if not band_name:
+            raise FileNotFoundError(f"Polarization type not found in file name: {xml_file}")
+
+        print(f"Reading calibration for {band_name} band")
+
+        xml_path = os.path.join(calibration_path, xml_file)
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        lines = []
+        pixels = None
+        correction_values = []
+        azimuth_times=[]
+
+        for calib_vec in root.findall('.//calibrationVector'):
+            # line = int(calib_vec.find('line').text)
+            pixel_str = calib_vec.find('pixel').text.strip()
+            value_str = calib_vec.find(representation_type).text.strip()
+            azimuth_time = calib_vec.find('azimuthTime').text
+            print(azimuth_time,"khjkhjk")
+
+            pixels = [int(x) for x in pixel_str.split()]
+            values = [float(x) for x in value_str.split()]
+
+            # lines.append(line)
+            correction_values.append(values)
+            azimuth_times.append(azimuth_time)
+
+        beta_array = np.array(correction_values)
+        lut = xr.DataArray(beta_array, coords={"line": azimuth_times, "pixel": pixels}, dims=["line", "pixel"])
+
+        # lut = xr.DataArray(beta_array, coords={"azimuth_time": azimuth_times, "ground_range": pixels}, dims=["azimuth_time", "ground_range"])
+        
         lut_dict[band_name]= lut    
     lut_ds = xr.Dataset(lut_dict)
     print("Radiometric calibration LUT created successfully")
