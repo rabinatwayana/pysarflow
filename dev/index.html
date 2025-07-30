@@ -123,22 +123,25 @@ This command reads project's configuration (i.e. <code>pyproject.toml</code>) an
 <li><strong>Commitizen</strong>: Helps enforce conventional commit messages for better project history.</li>
 </ul>
 <p>It should be installed already. If not run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pre-commit<span class="w"> </span>install
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pre-commit<span class="w"> </span>install
+</code></pre></div>
+Then, run follwing command to run all the pre-commit hooks, configured in your .pre-commit-config.yaml file</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pre-commit<span class="w"> </span>run<span class="w"> </span>--all-files
 </code></pre></div>
 <h2 id="5-build-documentation-github-page">5. Build Documentation Github Page<a class="headerlink" href="#5-build-documentation-github-page" title="Permanent link">&para;</a></h2>
 <h4 id="build-the-static-site">Build the Static Site<a class="headerlink" href="#build-the-static-site" title="Permanent link">&para;</a></h4>
 <p>Generate the static HTML files for your documentation inside the site/ directory by running:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>mkdocs<span class="w"> </span>build
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mkdocs<span class="w"> </span>build
 </code></pre></div></p>
 <h4 id="preview-the-documentation-locally">Preview the Documentation Locally<a class="headerlink" href="#preview-the-documentation-locally" title="Permanent link">&para;</a></h4>
 <p>To serve the documentation locally and preview it in your browser, run:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mkdocs<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>serve
 </code></pre></div>
 By default, this will make the site available at: http://127.0.0.1:8000/pysarflow/</p>
 <h4 id="publish-to-github-pages">Publish to GitHub Pages<a class="headerlink" href="#publish-to-github-pages" title="Permanent link">&para;</a></h4>
 <p>Your GitHub repository is configured to serve the documentation site from the gh-pages branch.
 To deploy your site, run:</p>
-<p><div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>gh-deploy
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>mkdocs<span class="w"> </span>gh-deploy
 </code></pre></div>
 This command will build the site, commit the generated files to the gh-pages branch, and push it to GitHub.</p>
 <p>Once deployed, your documentation will be available at:
