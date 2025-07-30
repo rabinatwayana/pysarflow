@@ -7,4 +7,4 @@ site/
 dump/
 .DS_Store
 docs/.DS_Store
-docs/data/
+docs/data/*

@@ -1,6 +1,6 @@
 # pysarflow
 
-An open-source python library for SAR data processing 
+An open-source python library for SAR data processing
 
 > [!WARNING]
 > This library is under active development and lot of its functionality is still yet to code.

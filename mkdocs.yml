@@ -54,6 +54,9 @@ plugins:
               show_root_heading: true
               show_docstring: true
               show_submodules: true
+  - exclude:
+      glob:
+        - data/**
 
 nav :
  - Home: index.md

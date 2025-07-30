@@ -1,31 +1,33 @@
+# -*- coding: utf-8 -*-
 """
 Preprocessing Sentinel1 SLC Data
 
-This Python script enables users to perform essential preprocessing steps 
-on Sentinel-1 SLC data, including thermal noise removal, radiometric calibration, 
+This Python script enables users to perform essential preprocessing steps
+on Sentinel-1 SLC data, including thermal noise removal, radiometric calibration,
 and terrain correction.
 
 It accepts Sentinel-1 products in the .SAFE format.
 
-The script depends on the 'esa_snappy' library, which must be installed 
+The script depends on the 'esa_snappy' library, which must be installed
 in the Python environment where this script is executed.
 
 This file can also be imported as a module and contains the following functions:
-    Major: 
-        * read_slc_product  
+    Major:
+        * read_slc_product
     Supporting:
-        *  
+        *
 """
 
 from esa_snappy import ProductIO
 import os
 
+
 def read_slc_product(product_path):
     """
     Reads a Sentinel-1 GRD product using SNAP's ProductIO.
 
-    This function checks whether the provided product path exists on disk, then 
-    attempts to load the product using ProductIO.readProduct. If the product 
+    This function checks whether the provided product path exists on disk, then
+    attempts to load the product using ProductIO.readProduct. If the product
     cannot be read, it raises a RuntimeError with details about the failure.
 
     Args:
@@ -44,4 +46,6 @@ def read_slc_product(product_path):
         product = ProductIO.readProduct(product_path)
         return product
     except Exception as e:
-        raise RuntimeError(f"An error occurred while reading the grd product: {str(e)}") from e
+        raise RuntimeError(
+            f"An error occurred while reading the grd product: {str(e)}"
+        ) from e

@@ -2,32 +2,28 @@
 
 Welcome to the development guide for pysarflow!
 
-## 1. Install UV
-
-We use [UV](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) because it simplifies installation and synchronization of dependencies, making development smoother and more efficient.
-
-Install UV by running:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+## 1. Create Conda Environment and Link with SNAP software
 
 
-## 2. Sync Project Dependencies
 
-Once UV is installed, install the project dependencies directly into your virtual environment (`.venv`) with:
+## 2. Clone the github repository
 
 ```bash
-uv sync
+git clone https://github.com/rabinatwayana/pysarflow.git
 ```
 
+##  3. Install package in editable mode
+Go to the directory containing pyproject.toml and run this command to install your local Python package in editable mode, allowing your code changes to take effect right away without needing to reinstall.
+
+```bash
+pip install -e .
+```
 This command reads project's configuration (i.e. `pyproject.toml`) and ensures that all required libraries are installed with the correct versions.
 
-## 3. Install Pre-commit Hooks
+## 4. Install Pre-commit Hooks
 
 We use [pre-commit](https://pre-commit.com/) hooks to ensure code quality and consistency across the project. Our pre-commit configuration includes:
 
-- **UV Lock**: Ensures locking of dependency versions.
 - **Ruff Hooks (linter and formatter)**: Ruff is used for linting and formatting. It helps catch issues and enforces a consistent code style.
 - **Commitizen**: Helps enforce conventional commit messages for better project history.
 
@@ -37,15 +33,34 @@ It should be installed already. If not run:
 pre-commit install
 ```
 
-This will automatically run the following on every commit:
+## 5. Build Documentation Github Page
+#### Build the Static Site
+Generate the static HTML files for your documentation inside the site/ directory by running:
+```bash
+mkdocs build
+```
+#### Preview the Documentation Locally
+To serve the documentation locally and preview it in your browser, run:
+```bash
+mkdocs serve
+```
+By default, this will make the site available at: http://127.0.0.1:8000/pysarflow/
 
-- uv-lock: Validates your UV lock file.
-- ruff: Checks code style and formatting.
-- commitizen: Validates commit messages against the conventional commits specification.
+#### Publish to GitHub Pages
+Your GitHub repository is configured to serve the documentation site from the gh-pages branch.
+To deploy your site, run:
 
-## 4. Getting Started
+```bash
+mkdocs gh-deploy
+```
+This command will build the site, commit the generated files to the gh-pages branch, and push it to GitHub.
 
-Once you have UV installed, dependencies synced, and pre-commit hooks set, you’re ready for development. A typical workflow might look like:
+Once deployed, your documentation will be available at:
+https://rabinatwayana.github.io/pysarflow/
+
+## 6. Getting Started
+
+Once you have environment setup, installed dependencies and pre-commit hooks set, you’re ready for development. A typical workflow might look like:
 
 - Work on a **feature** or **bug fix**. Just tell other people what you will be working on in issues
 - **Run your tests** – our project uses Pytest for testing.
