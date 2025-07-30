@@ -9,12 +9,12 @@ It includes modules for handling Ground Range Detected (GRD)
 and Single Look Complex (SLC) data formats.
 
 Modules:
-- grd: Contains functions for GRD data processing (e.g., summing GRD images).
-- slc: Contains functions for SLC data processing (e.g., summing SLC images).
+- grd: Contains functions for GRD data processing.
+- slc: Contains functions for SLC data processing.
 
 """
 
-from .grd import sum_grd
-from .slc import sum_slc
+from .grd import read_grd_product
+from .slc import read_slc_product
 
-__all__ = ["sum_grd", "sum_slc"]
+__all__ = ["read_grd_product"]

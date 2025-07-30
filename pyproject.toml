@@ -11,7 +11,7 @@ authors = [
 ]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = "==3.9.23"
 keywords = ["sar", "sarpy"]
 classifiers = [
   "Natural Language :: English",
@@ -29,7 +29,8 @@ dependencies = [
     "mkdocs-jupyter>=0.25.1",
     "mkdocs-git-revision-date-localized-plugin>=1.4.5",
     "mkdocstrings>=0.29.1",
-    "mkdocstrings-python>=1.16.10"
+    "mkdocstrings-python>=1.16.10",
+    "esa-snappy==1.0.9"
 ]
 
 [project.urls]
