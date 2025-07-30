@@ -51,13 +51,25 @@
               <ul class="current">
                 <li class="toctree-l1 current"><a class="reference internal current" href="#">Contribute</a>
     <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#1-install-uv">1. Install UV</a>
+    <li class="toctree-l2"><a class="reference internal" href="#1-create-conda-environment-and-link-with-snap-software">1. Create Conda Environment and Link with SNAP software</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#2-sync-project-dependencies">2. Sync Project Dependencies</a>
+    <li class="toctree-l2"><a class="reference internal" href="#2-clone-the-github-repository">2. Clone the github repository</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#3-install-pre-commit-hooks">3. Install Pre-commit Hooks</a>
+    <li class="toctree-l2"><a class="reference internal" href="#3-install-package-in-editable-mode">3. Install package in editable mode</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#4-getting-started">4. Getting Started</a>
+    <li class="toctree-l2"><a class="reference internal" href="#4-install-pre-commit-hooks">4. Install Pre-commit Hooks</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-build-documentation-github-page">5. Build Documentation Github Page</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#build-the-static-site">Build the Static Site</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#preview-the-documentation-locally">Preview the Documentation Locally</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#publish-to-github-pages">Publish to GitHub Pages</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-getting-started">6. Getting Started</a>
     </li>
     </ul>
                 </li>
@@ -95,34 +107,44 @@
               
                 <h1 id="development-setup">Development Setup<a class="headerlink" href="#development-setup" title="Permanent link">&para;</a></h1>
 <p>Welcome to the development guide for pysarflow!</p>
-<h2 id="1-install-uv">1. Install UV<a class="headerlink" href="#1-install-uv" title="Permanent link">&para;</a></h2>
-<p>We use <a href="https://docs.astral.sh/uv/getting-started/installation/#standalone-installer">UV</a> because it simplifies installation and synchronization of dependencies, making development smoother and more efficient.</p>
-<p>Install UV by running:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+<h2 id="1-create-conda-environment-and-link-with-snap-software">1. Create Conda Environment and Link with SNAP software<a class="headerlink" href="#1-create-conda-environment-and-link-with-snap-software" title="Permanent link">&para;</a></h2>
+<h2 id="2-clone-the-github-repository">2. Clone the github repository<a class="headerlink" href="#2-clone-the-github-repository" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/rabinatwayana/pysarflow.git
 </code></pre></div>
-<h2 id="2-sync-project-dependencies">2. Sync Project Dependencies<a class="headerlink" href="#2-sync-project-dependencies" title="Permanent link">&para;</a></h2>
-<p>Once UV is installed, install the project dependencies directly into your virtual environment (<code>.venv</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>sync
+<h2 id="3-install-package-in-editable-mode">3. Install package in editable mode<a class="headerlink" href="#3-install-package-in-editable-mode" title="Permanent link">&para;</a></h2>
+<p>Go to the directory containing pyproject.toml and run this command to install your local Python package in editable mode, allowing your code changes to take effect right away without needing to reinstall.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </code></pre></div>
-<p>This command reads project's configuration (i.e. <code>pyproject.toml</code>) and ensures that all required libraries are installed with the correct versions.</p>
-<h2 id="3-install-pre-commit-hooks">3. Install Pre-commit Hooks<a class="headerlink" href="#3-install-pre-commit-hooks" title="Permanent link">&para;</a></h2>
+This command reads project's configuration (i.e. <code>pyproject.toml</code>) and ensures that all required libraries are installed with the correct versions.</p>
+<h2 id="4-install-pre-commit-hooks">4. Install Pre-commit Hooks<a class="headerlink" href="#4-install-pre-commit-hooks" title="Permanent link">&para;</a></h2>
 <p>We use <a href="https://pre-commit.com/">pre-commit</a> hooks to ensure code quality and consistency across the project. Our pre-commit configuration includes:</p>
 <ul>
-<li><strong>UV Lock</strong>: Ensures locking of dependency versions.</li>
 <li><strong>Ruff Hooks (linter and formatter)</strong>: Ruff is used for linting and formatting. It helps catch issues and enforces a consistent code style.</li>
 <li><strong>Commitizen</strong>: Helps enforce conventional commit messages for better project history.</li>
 </ul>
 <p>It should be installed already. If not run:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pre-commit<span class="w"> </span>install
 </code></pre></div>
-<p>This will automatically run the following on every commit:</p>
-<ul>
-<li>uv-lock: Validates your UV lock file.</li>
-<li>ruff: Checks code style and formatting.</li>
-<li>commitizen: Validates commit messages against the conventional commits specification.</li>
-</ul>
-<h2 id="4-getting-started">4. Getting Started<a class="headerlink" href="#4-getting-started" title="Permanent link">&para;</a></h2>
-<p>Once you have UV installed, dependencies synced, and pre-commit hooks set, you’re ready for development. A typical workflow might look like:</p>
+<h2 id="5-build-documentation-github-page">5. Build Documentation Github Page<a class="headerlink" href="#5-build-documentation-github-page" title="Permanent link">&para;</a></h2>
+<h4 id="build-the-static-site">Build the Static Site<a class="headerlink" href="#build-the-static-site" title="Permanent link">&para;</a></h4>
+<p>Generate the static HTML files for your documentation inside the site/ directory by running:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>mkdocs<span class="w"> </span>build
+</code></pre></div></p>
+<h4 id="preview-the-documentation-locally">Preview the Documentation Locally<a class="headerlink" href="#preview-the-documentation-locally" title="Permanent link">&para;</a></h4>
+<p>To serve the documentation locally and preview it in your browser, run:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mkdocs<span class="w"> </span>serve
+</code></pre></div>
+By default, this will make the site available at: http://127.0.0.1:8000/pysarflow/</p>
+<h4 id="publish-to-github-pages">Publish to GitHub Pages<a class="headerlink" href="#publish-to-github-pages" title="Permanent link">&para;</a></h4>
+<p>Your GitHub repository is configured to serve the documentation site from the gh-pages branch.
+To deploy your site, run:</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>gh-deploy
+</code></pre></div>
+This command will build the site, commit the generated files to the gh-pages branch, and push it to GitHub.</p>
+<p>Once deployed, your documentation will be available at:
+https://rabinatwayana.github.io/pysarflow/</p>
+<h2 id="6-getting-started">6. Getting Started<a class="headerlink" href="#6-getting-started" title="Permanent link">&para;</a></h2>
+<p>Once you have environment setup, installed dependencies and pre-commit hooks set, you’re ready for development. A typical workflow might look like:</p>
 <ul>
 <li>Work on a <strong>feature</strong> or <strong>bug fix</strong>. Just tell other people what you will be working on in issues</li>
 <li><strong>Run your tests</strong> – our project uses Pytest for testing.</li>

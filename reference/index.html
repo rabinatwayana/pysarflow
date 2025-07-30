@@ -51,11 +51,11 @@
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#pysarflow.grd">grd</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#pysarflow.grd.sum_grd">sum_grd</a>
+    <li class="toctree-l2"><a class="reference internal" href="#pysarflow.grd.read_grd_product">read_grd_product</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#pysarflow.slc">slc</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#pysarflow.slc.sum_slc">sum_slc</a>
+    <li class="toctree-l2"><a class="reference internal" href="#pysarflow.slc.read_slc_product">read_slc_product</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#pysarflow.utils">utils</a>
     </li>
@@ -112,8 +112,22 @@
 <a id="pysarflow.grd"></a>
     <div class="doc doc-contents first">
 
-        <p>It includes functions for handling Ground Range Detected (GRD) datasets.</p>
+        <p>Preprocessing Sentinel1 GRD Data</p>
+<p>This Python script enables users to perform essential preprocessing steps
+on Sentinel-1 GRD data, including thermal noise removal, radiometric calibration,
+and terrain correction.</p>
+<p>It accepts Sentinel-1 products in the .SAFE format.</p>
+<p>The script depends on the 'esa_snappy' library, which must be installed
+in the Python environment where this script is executed.</p>
 
+
+<details class="this-file-can-also-be-imported-as-a-module-and-contains-the-following-functions" open>
+  <summary>This file can also be imported as a module and contains the following functions</summary>
+  <p>Major:
+    * read_grd_product
+Supporting:
+    *</p>
+</details>
 
 
 
@@ -135,24 +149,151 @@
 <div class="doc doc-object doc-function">
 
 
-<h2 id="pysarflow.grd.sum_grd" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sum_grd</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span></code>
+<h2 id="pysarflow.grd.read_grd_product" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">read_grd_product</span><span class="p">(</span><span class="n">product_path</span><span class="p">)</span></code>
 
-<a href="#pysarflow.grd.sum_grd" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#pysarflow.grd.read_grd_product" class="headerlink" title="Permanent link">&para;</a></h2>
 
 
     <div class="doc doc-contents ">
 
-        <p>Dockstring here.</p>
+        <p>Reads a Sentinel-1 GRD product using SNAP's ProductIO.</p>
+<p>This function checks whether the provided product path exists on disk, then
+attempts to load the product using ProductIO.readProduct. If the product
+cannot be read, it raises a RuntimeError with details about the failure.</p>
 
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>product_path</code></b>
+                  (<code><span title="str">str</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the Sentinel-1 SAFE format product directory or file.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>product</code></b>              –
+              <div class="doc-md-description">
+                <p>The SNAP product object representing the loaded Sentinel-1 data.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Raises:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+                  <code><span title="FileNotFoundError">FileNotFoundError</span></code>
+              –
+              <div class="doc-md-description">
+                <p>If the specified product path does not exist.</p>
+              </div>
+            </li>
+            <li>
+                  <code><span title="RuntimeError">RuntimeError</span></code>
+              –
+              <div class="doc-md-description">
+                <p>If reading the product fails due to unexpected errors.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
             <details class="quote">
               <summary>Source code in <code>pysarflow/grd.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-5">5</a></span>
-<span class="normal"><a href="#__codelineno-0-6">6</a></span>
-<span class="normal"><a href="#__codelineno-0-7">7</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-5" name="__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">sum_grd</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Dockstring here.&quot;&quot;&quot;</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7"></a>    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-25">25</a></span>
+<span class="normal"><a href="#__codelineno-0-26">26</a></span>
+<span class="normal"><a href="#__codelineno-0-27">27</a></span>
+<span class="normal"><a href="#__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span>
+<span class="normal"><a href="#__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span>
+<span class="normal"><a href="#__codelineno-0-38">38</a></span>
+<span class="normal"><a href="#__codelineno-0-39">39</a></span>
+<span class="normal"><a href="#__codelineno-0-40">40</a></span>
+<span class="normal"><a href="#__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#__codelineno-0-51">51</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">read_grd_product</span><span class="p">(</span><span class="n">product_path</span><span class="p">):</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a><span class="sd">    Reads a Sentinel-1 GRD product using SNAP&#39;s ProductIO.</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="sd">    This function checks whether the provided product path exists on disk, then</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="sd">    attempts to load the product using ProductIO.readProduct. If the product</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="sd">    cannot be read, it raises a RuntimeError with details about the failure.</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        product_path (str): Path to the Sentinel-1 SAFE format product directory or file.</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">        product: The SNAP product object representing the loaded Sentinel-1 data.</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">        FileNotFoundError: If the specified product path does not exist.</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">        RuntimeError: If reading the product fails due to unexpected errors.</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">product_path</span><span class="p">):</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a>            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Product path does not exist: </span><span class="si">{</span><span class="n">product_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>        <span class="n">product</span> <span class="o">=</span> <span class="n">ProductIO</span><span class="o">.</span><span class="n">readProduct</span><span class="p">(</span><span class="n">product_path</span><span class="p">)</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a>        <span class="k">return</span> <span class="n">product</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a>            <span class="sa">f</span><span class="s2">&quot;An error occurred while reading the grd product: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a>        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -174,8 +315,22 @@
 <a id="pysarflow.slc"></a>
     <div class="doc doc-contents first">
 
-        <p>It includes functions for handling Single Look Complex (SLC) datasets.</p>
+        <p>Preprocessing Sentinel1 SLC Data</p>
+<p>This Python script enables users to perform essential preprocessing steps
+on Sentinel-1 SLC data, including thermal noise removal, radiometric calibration,
+and terrain correction.</p>
+<p>It accepts Sentinel-1 products in the .SAFE format.</p>
+<p>The script depends on the 'esa_snappy' library, which must be installed
+in the Python environment where this script is executed.</p>
 
+
+<details class="this-file-can-also-be-imported-as-a-module-and-contains-the-following-functions" open>
+  <summary>This file can also be imported as a module and contains the following functions</summary>
+  <p>Major:
+    * read_slc_product
+Supporting:
+    *</p>
+</details>
 
 
 
@@ -197,24 +352,151 @@
 <div class="doc doc-object doc-function">
 
 
-<h2 id="pysarflow.slc.sum_slc" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sum_slc</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span></code>
+<h2 id="pysarflow.slc.read_slc_product" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">read_slc_product</span><span class="p">(</span><span class="n">product_path</span><span class="p">)</span></code>
 
-<a href="#pysarflow.slc.sum_slc" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#pysarflow.slc.read_slc_product" class="headerlink" title="Permanent link">&para;</a></h2>
 
 
     <div class="doc doc-contents ">
 
-        <p>Dockstring here.</p>
+        <p>Reads a Sentinel-1 GRD product using SNAP's ProductIO.</p>
+<p>This function checks whether the provided product path exists on disk, then
+attempts to load the product using ProductIO.readProduct. If the product
+cannot be read, it raises a RuntimeError with details about the failure.</p>
 
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Parameters:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+              <b><code>product_path</code></b>
+                  (<code><span title="str">str</span></code>)
+              –
+              <div class="doc-md-description">
+                <p>Path to the Sentinel-1 SAFE format product directory or file.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Returns:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+<b><code>product</code></b>              –
+              <div class="doc-md-description">
+                <p>The SNAP product object representing the loaded Sentinel-1 data.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="field-list">
+  <colgroup>
+    <col class="field-name" />
+    <col class="field-body" />
+  </colgroup>
+  <tbody valign="top">
+    <tr class="field">
+      <th class="field-name">Raises:</th>
+      <td class="field-body">
+        <ul class="first simple">
+            <li>
+                  <code><span title="FileNotFoundError">FileNotFoundError</span></code>
+              –
+              <div class="doc-md-description">
+                <p>If the specified product path does not exist.</p>
+              </div>
+            </li>
+            <li>
+                  <code><span title="RuntimeError">RuntimeError</span></code>
+              –
+              <div class="doc-md-description">
+                <p>If reading the product fails due to unexpected errors.</p>
+              </div>
+            </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
             <details class="quote">
               <summary>Source code in <code>pysarflow/slc.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-6">6</a></span>
-<span class="normal"><a href="#__codelineno-0-7">7</a></span>
-<span class="normal"><a href="#__codelineno-0-8">8</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-6" name="__codelineno-0-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">sum_slc</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Dockstring here.&quot;&quot;&quot;</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8"></a>    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-25">25</a></span>
+<span class="normal"><a href="#__codelineno-0-26">26</a></span>
+<span class="normal"><a href="#__codelineno-0-27">27</a></span>
+<span class="normal"><a href="#__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span>
+<span class="normal"><a href="#__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span>
+<span class="normal"><a href="#__codelineno-0-38">38</a></span>
+<span class="normal"><a href="#__codelineno-0-39">39</a></span>
+<span class="normal"><a href="#__codelineno-0-40">40</a></span>
+<span class="normal"><a href="#__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#__codelineno-0-51">51</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">read_slc_product</span><span class="p">(</span><span class="n">product_path</span><span class="p">):</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a><span class="sd">    Reads a Sentinel-1 GRD product using SNAP&#39;s ProductIO.</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="sd">    This function checks whether the provided product path exists on disk, then</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="sd">    attempts to load the product using ProductIO.readProduct. If the product</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="sd">    cannot be read, it raises a RuntimeError with details about the failure.</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        product_path (str): Path to the Sentinel-1 SAFE format product directory or file.</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">        product: The SNAP product object representing the loaded Sentinel-1 data.</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">        FileNotFoundError: If the specified product path does not exist.</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">        RuntimeError: If reading the product fails due to unexpected errors.</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">product_path</span><span class="p">):</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a>            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Product path does not exist: </span><span class="si">{</span><span class="n">product_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>        <span class="n">product</span> <span class="o">=</span> <span class="n">ProductIO</span><span class="o">.</span><span class="n">readProduct</span><span class="p">(</span><span class="n">product_path</span><span class="p">)</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a>        <span class="k">return</span> <span class="n">product</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a>            <span class="sa">f</span><span class="s2">&quot;An error occurred while reading the grd product: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a>        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -236,7 +518,7 @@
 <a id="pysarflow.utils"></a>
     <div class="doc doc-contents first">
 
-        <p>It includes common functionalities that would be used in other modules.</p>
+        <p>It includes common or secondary functionalities that would be used in other modules.</p>
 
 
 
