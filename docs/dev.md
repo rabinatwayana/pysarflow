@@ -32,6 +32,11 @@ It should be installed already. If not run:
 ```bash
 pre-commit install
 ```
+Then, run follwing command to run all the pre-commit hooks, configured in your .pre-commit-config.yaml file
+
+```bash
+pre-commit run --all-files
+```
 
 ## 5. Build Documentation Github Page
 #### Build the Static Site
