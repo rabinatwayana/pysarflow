@@ -115,6 +115,26 @@ def apply_orbit_file(product):
     print('\tOrbit File applied.')
     return output
 
+def thermal_noise_removal(product) :
+    """
+    Removes thermal noise from the SAR product.
+
+    Thermal noise is a constant noise floor that affects SAR images, especially
+    in low-backscatter areas. This step removes this noise, improving the signal-to-noise ratio.
+
+    Args:
+        product (esa_snappy.Product): The input SAR Product object.
+
+    Returns:
+        esa_snappy.Product: The product after thermal noise removal.
+    """
+    print('\tPerforming thermal noise removal...')
+    parameters = HashMap()
+    parameters.put('removeThermalNoise', True)
+    output = GPF.createProduct('ThermalNoiseRemoval', parameters, product)
+    print('\tThermal noise removed.')
+    return output
+
 def border_noise_removal(product) :
     """
     Removes border noise from the SAR product.
@@ -178,6 +198,80 @@ def radiometric_calibration(product, polarization, pols_selected) :
     output = GPF.createProduct("Calibration", parameters, product)
     print('\tRadiometric calibration completed.')
     return output
+
+def speckle_filter(product, filterSizeY='5', filterSizeX='5', filter="Lee", dampingFactor='2', estimateENL='true', enl='1.0', numLooksStr='1',targetWindowSizeStr='3x3',sigmaStr='0.9',anSize='50'):
+    """
+    Apply speckle filtering to a SAR product using the specified filter parameters.
+
+    This function uses the Sentinel-1 toolbox's Speckle-Filter operator via GPF(Graph Processing Framework) to reduce speckle noise in SAR imagery.
+
+    Parameters:
+    -----------
+    product : Product
+        The input SAR product to be filtered.
+
+    filterSizeY : str, optional
+        Filter size in the Y direction (default is '5').
+
+    filterSizeX : str, optional
+        Filter size in the X direction (default is '5').
+
+    filter : str, optional
+        Type of speckle filter to apply. Common options include "Lee", "Refined Lee", etc.
+        Default is "Lee".
+
+    dampingFactor : str, optional
+        Damping factor used by the filter (default is '2').
+
+    estimateENL : str, optional
+        Whether to estimate the Equivalent Number of Looks (ENL) from the data.
+        Accepts 'true' or 'false' (default is 'true').
+
+    enl : str, optional
+        ENL value to use if estimateENL is false (default is '1.0').
+
+    numLooksStr : str, optional
+        Number of looks in the data (default is '1').
+
+    targetWindowSizeStr : str, optional
+        Target window size for filtering, typically in the form '3x3' (default is '3x3').
+
+    sigmaStr : str, optional
+        Sigma parameter for filter sensitivity (default is '0.9').
+
+    anSize : str, optional
+        Analysis window size used in the filtering process (default is '50').
+
+    Returns:
+    --------
+    Product
+        The filtered SAR product after applying the speckle filter.
+    """
+    parameters = HashMap()
+    parameters.put('sourceBands','Sigma0_VV')
+    parameters.put('filter',filter)
+    parameters.put('filterSizeX', filterSizeX)
+    parameters.put('filterSizeY', filterSizeY)
+    parameters.put('dampingFactor',dampingFactor)
+    parameters.put('estimateENL',estimateENL)
+    parameters.put('enl',enl)
+    parameters.put('numLooksStr',numLooksStr)
+    parameters.put('targetWindowSizeStr',targetWindowSizeStr)
+    parameters.put('sigmaStr',sigmaStr)
+    parameters.put('anSize',anSize)
+    speckle_filter_output = GPF.createProduct('Speckle-Filter',parameters,product)
+    print('\tSpeckle filter completed.')
+    return speckle_filter_output
+
+
+def terrain_correction(product,demName='SRTM 3Sec',pixelSpacingInMeter=10.0,sourceBands='Sigma0_VV'):
+    parameters = HashMap()
+    parameters.put('demName',demName)
+    parameters.put('pixelSpacingInMeter', pixelSpacingInMeter)
+    parameters.put('sourceBands',sourceBands)
+    tc_output = GPF.createProduct("Terrain-Correction", parameters,product)
+    print('\tTerrain correction completed.')
+    return tc_output
 
 def conversion_to_db(product):
     """
