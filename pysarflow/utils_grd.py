@@ -330,10 +330,6 @@ def apply_correction(type, ds, lut_ds):
     calibrated_ds= xr.Dataset(corrected_dict)
     return calibrated_ds
 
-
-import re
-import os
-
 def download_orbit_file(safe_folder, save_dir):
     """
     Extract date and mission from Sentinel-1 SAFE or zip filename,
