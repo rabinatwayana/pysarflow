@@ -326,7 +326,7 @@ def goldstein_phase_filtering(product):
     return output
 
 def phase_to_elevation(product, DEM):
-     """
+    """
     Convert unwrapped interferometric phase to elevation using a Digital Elevation Model (DEM).
 
     This function uses the SNAP Graph Processing Framework (GPF) to apply the 
@@ -357,11 +357,12 @@ def phase_to_elevation(product, DEM):
       in the DEM.
     - This step assumes the input phase has already been unwrapped and filtered.
     """
-     parameters = HashMap()
-     print('Turning Phase to Elevation...')
-     parameters.put('demName', DEM)
-     parameters.put('demResamplingMethod', 'BILINEAR_INTERPOLATION')
-     parameters.put('externalDEMNoDataValue', 0.0)
-     output = GPF.createProduct("PhaseToElevation", parameters, product)
-     print("Phase to Elevation applied!")
-     return output
+   
+    parameters = HashMap()
+    print('Turning Phase to Elevation...')
+    parameters.put('demName', DEM)
+    parameters.put('demResamplingMethod', 'BILINEAR_INTERPOLATION')
+    parameters.put('externalDEMNoDataValue', 0.0)
+    output = GPF.createProduct("PhaseToElevation", parameters, product)
+    print("Phase to Elevation applied!")
+    return output
