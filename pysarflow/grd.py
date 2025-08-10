@@ -22,14 +22,13 @@ import os
 import esa_snappy
 import numpy as np
 import matplotlib.pyplot as plt
-
 from esa_snappy import Product, ProductIO, ProductUtils, WKTReader, HashMap, GPF, jpy
-
+from .utils import extract_bbox
 
 # Loads the SNAP operators globally when the module is imported
 GPF.getDefaultInstance().getOperatorSpiRegistry().loadOperatorSpis()
 
-def read_SAFE_product(file_path):
+def read_grd_product(file_path):
     """
     Reads a Sentinel-1 SAR GRD product from a .SAFE directory or a .zip archive.
 
@@ -54,6 +53,45 @@ def read_SAFE_product(file_path):
     print("\tProduct read successfully.")
     return product
 
+def subset_AOI(product, bbox=[], file_path=None) :
+    """
+    The raw image is too large to process, theredore to reduce resources 
+    required to process, the product is subset to a specific AOI.
+
+    Args:
+        product (esa_snappy.Product): Input SAR product.
+        bbox (list): Bounding box as [minLon, minLat, maxLon, maxLat].
+
+    Returns:
+        esa_snappy.Product: Subsetted product.
+
+    Raises:
+        ValueError: If bbox is None or invalid.
+        Exception: If both bbox or file_path is not passed
+    """
+    if bbox:
+        if len(bbox) != 4:
+            raise ValueError("bbox must be a list of [minLon, minLat, maxLon, maxLat]")
+        geometry_wkt = (
+            f"POLYGON(({bbox[0]} {bbox[1]}, {bbox[2]} {bbox[1]}, "
+            f"{bbox[2]} {bbox[3]}, {bbox[0]} {bbox[3]}, {bbox[0]} {bbox[1]}))"
+            )
+    elif file_path:
+        geometry_wkt=extract_bbox(file_path=file_path)
+    else:
+        raise Exception(f"Either bbox or file_path should be provided")
+
+    print('\tSubsetting using bounding box:', bbox)
+
+    geometry = WKTReader().read(geometry_wkt)
+    HashMap = jpy.get_type('java.util.HashMap')
+    GPF.getDefaultInstance().getOperatorSpiRegistry().loadOperatorSpis()
+    parameters = HashMap()
+    parameters.put('copyMetadata', True)
+    parameters.put('geoRegion', geometry)
+    output = GPF.createProduct('Subset', parameters, product)
+    print('\tProduct subsetted.')
+    return output
 
 def apply_orbit_file(product):
     """

@@ -14,7 +14,7 @@ Modules:
 
 """
 
-from .grd import read_grd_product
+from .grd import read_grd_product, subset_AOI
 from .slc import read_slc_product
 
-__all__ = ["read_grd_product"]
+__all__ = ["read_grd_product","subset_AOI"]
