@@ -86,7 +86,13 @@ def get_subswath(aoi, product):
 
 def extract_bbox(file_path):
     """
-    
+    Extracts a bounding box from a shapefile and returns it as a WKT polygon.
+
+    Args:
+        file_path (str): Path to the shapefile (.shp) containing the boundary geometry.
+
+    Returns:
+        str: WKT string representing the bounding polygon for use in SNAP SubsetOp.
     """
     r = shapefile.Reader("data/island_boundary2.shp")
     g=[]
