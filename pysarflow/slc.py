@@ -18,8 +18,22 @@ This file can also be imported as a module and contains the following functions:
         *
 """
 
-from esa_snappy import ProductIO
 import os
+import esa_snappy
+from esa_snappy import GPF
+from esa_snappy import ProductIO, GeoPos, PixelPos, WKTReader
+from esa_snappy import HashMap
+from esa_snappy import jpy
+from time import *
+import numpy as np
+import math
+from pathlib import Path
+from shapely.geometry import Point, Polygon, box
+from shapely import wkt as _wkt
+import geopandas as gpd
+import xml.etree.ElementTree as ET
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 
 def read_slc_product(product_path):
@@ -49,7 +63,134 @@ def read_slc_product(product_path):
         raise RuntimeError(
             f"An error occurred while reading the grd product: {str(e)}"
         ) from e
-    
+
+def burst_for_geometry(product, safe_dir, geom, subswath=None):
+    """
+    Determine TOPS burst index (or range) for a geometry in a Sentinel-1 IW SLC.
+
+    Args:
+      product   : SNAP Product (ProductIO.readProduct(...))
+      safe_dir  : path to the *.SAFE folder (str or Path)
+      geom      : Shapely Point/Polygon, or WKT string, or bbox tuple (minlon,minlat,maxlon,maxlat)
+      subswath  : optional 'IW1'|'IW2'|'IW3' to force a swath
+
+    Returns (dict):
+      {
+        'swath': 'IW1'|'IW2'|'IW3',
+        'band_name': 'Intensity_IW1_VV',   # band used
+        'linesPerBurst': 1495,
+        'numberOfBursts': 10,
+        'burst': 5,              # for Point
+        'firstBurst': 4,         # for Polygon
+        'lastBurst': 6,          # for Polygon
+        'geom_type': 'Point'|'Polygon'
+      }
+    """
+
+    # --- normalize geometry ---
+    if isinstance(geom, (list, tuple)) and len(geom) == 4:
+        geom = box(*geom)
+    elif isinstance(geom, str):
+        geom = _wkt.loads(geom)
+    elif not isinstance(geom, (Point, Polygon)):
+        raise ValueError("geom must be Point/Polygon, WKT string, or bbox tuple")
+
+    is_point = isinstance(geom, Point)
+    aoi = geom if not is_point else geom
+
+    names = list(product.getBandNames())
+
+    # --- pick a band that actually covers the geometry (auto-detect swath if needed) ---
+    def band_contains_point(band, lat, lon):
+        gc = band.getGeoCoding()
+        if gc is None: return False, None
+        pp = gc.getPixelPos(GeoPos(float(lat), float(lon)), None)
+        ok = (pp is not None and math.isfinite(pp.x) and math.isfinite(pp.y)
+              and 0 <= pp.x < band.getRasterWidth()
+              and 0 <= pp.y < band.getRasterHeight())
+        return ok, pp
+
+    # center we’ll use to probe coverage
+    probe = (aoi.y, aoi.x) if is_point else (aoi.centroid.y, aoi.centroid.x)
+
+    sw_order = [subswath] if subswath in ("IW1", "IW2", "IW3") else ["IW1", "IW2", "IW3"]
+    chosen_sw, chosen_band_name, chosen_pp = None, None, None
+
+    for sw in sw_order:
+        cands = [n for n in names if sw in n]
+        for name in cands:
+            ok, pp = band_contains_point(product.getBand(name), *probe)
+            if ok:
+                chosen_sw, chosen_band_name, chosen_pp = sw, name, pp
+                break
+        if chosen_sw:
+            break
+
+    if chosen_sw is None:
+        raise ValueError("Geometry is outside IW1/IW2/IW3 coverage for this product.")
+
+    band = product.getBand(chosen_band_name)
+    gc = band.getGeoCoding()
+    W, H = band.getRasterWidth(), band.getRasterHeight()
+
+    # --- read annotation XML for this swath (namespace-agnostic) ---
+    safe_dir = Path(safe_dir)
+    ann_dir = safe_dir / "annotation"
+    xml_files = sorted(ann_dir.glob(f"*{chosen_sw.lower()}*.xml"))
+    if not xml_files:
+        raise FileNotFoundError(f"No annotation XML found for {chosen_sw} in {ann_dir}")
+    root = ET.parse(xml_files[0]).getroot()
+
+    def find_text_any(root, local):
+        for el in root.iter():
+            if el.tag.rsplit('}', 1)[-1] == local and el.text:
+                return el.text.strip()
+        return None
+
+    txt_lpb = find_text_any(root, "linesPerBurst")
+    bursts_nodes = [el for el in root.iter() if el.tag.rsplit('}', 1)[-1] == "burst"]
+    numberOfBursts = int(find_text_any(root, "numberOfBursts")) if find_text_any(root, "numberOfBursts") else len(bursts_nodes)
+
+    if txt_lpb:
+        linesPerBurst = int(txt_lpb)
+    else:
+        # try infer from firstAzimuthLine step, else fallback to H / numBursts
+        first_lines = []
+        for b in bursts_nodes[:2]:
+            for el in b.iter():
+                if el.tag.rsplit('}', 1)[-1] == "firstAzimuthLine" and el.text:
+                    first_lines.append(int(el.text)); break
+        linesPerBurst = max(1, (first_lines[1] - first_lines[0]) if len(first_lines) == 2 else H // max(1, numberOfBursts))
+
+    out = {
+        "swath": chosen_sw,
+        "band_name": chosen_band_name,
+        "linesPerBurst": linesPerBurst,
+        "numberOfBursts": numberOfBursts,
+        "geom_type": "Point" if is_point else "Polygon",
+    }
+
+    # --- map geometry to pixel rows and compute burst index / range ---
+    def clamp_b(b): return max(1, min(numberOfBursts, b))
+
+    if is_point:
+        y = int(chosen_pp.y)
+        out["burst"] = clamp_b(y // linesPerBurst + 1)
+    else:
+        # use exterior vertices (and centroid) to get min/max valid rows
+        ys = []
+        for lon, lat in list(aoi.exterior.coords) + [(aoi.centroid.x, aoi.centroid.y)]:
+            pp = gc.getPixelPos(GeoPos(float(lat), float(lon)), None)
+            if (pp is not None and math.isfinite(pp.y) and 0 <= pp.y < H):
+                ys.append(pp.y)
+        if not ys:
+            raise ValueError("AOI polygon does not intersect the chosen sub-swath.")
+        y_min, y_max = min(ys), max(ys)
+        out["firstBurst"] = clamp_b(int(y_min) // linesPerBurst + 1)
+        out["lastBurst"]  = clamp_b(int(y_max) // linesPerBurst + 1)
+
+    return out
+
 
 def temporal_baseline(product1_path, product2_path):
     """
@@ -216,11 +357,11 @@ def phase_to_elevation(product, DEM):
       in the DEM.
     - This step assumes the input phase has already been unwrapped and filtered.
     """
-    parameters = HashMap()
-    print('Turning Phase to Elevation...')
-    parameters.put('demName', DEM)
-    parameters.put('demResamplingMethod', 'BILINEAR_INTERPOLATION')
-    parameters.put('externalDEMNoDataValue', 0.0)
-    output = GPF.createProduct("PhaseToElevation", parameters, product)
-    print("Phase to Elevation applied!")
-    return output
+     parameters = HashMap()
+     print('Turning Phase to Elevation...')
+     parameters.put('demName', DEM)
+     parameters.put('demResamplingMethod', 'BILINEAR_INTERPOLATION')
+     parameters.put('externalDEMNoDataValue', 0.0)
+     output = GPF.createProduct("PhaseToElevation", parameters, product)
+     print("Phase to Elevation applied!")
+     return output
