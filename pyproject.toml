@@ -32,6 +32,9 @@ dependencies = [
     "mkdocs-exclude>=1.0.2",
     "mkdocstrings-python>=1.16.10",
     "esa-snappy==1.0.9",
+    "matplotlib==3.9.4",
+    "pyshp==2.3.1",
+    "pygeoif==1.5.1"
 ]
 
 [project.urls]

@@ -3,8 +3,11 @@
 It includes common or secondary functionalities that would be used in other modules.
 
 """
+import shapefile
+import pygeoif
+from esa_snappy import jpy
+
 def get_subswath(aoi, product):
-    ):
     """
     Identify the Sentinel-1 subswath (e.g., IW1, IW2, or IW3) covering the given Area of Interest (AOI).
 
@@ -79,3 +82,24 @@ def get_subswath(aoi, product):
                 result = subswath
     
     return result
+
+
+def extract_bbox(file_path):
+    """
+    Extracts a bounding box from a shapefile and returns it as a WKT polygon.
+
+    Args:
+        file_path (str): Path to the shapefile (.shp) containing the boundary geometry.
+
+    Returns:
+        str: WKT string representing the bounding polygon for use in SNAP SubsetOp.
+    """
+    r = shapefile.Reader("data/island_boundary2.shp")
+    g=[]
+    for s in r.shapes():
+        g.append(pygeoif.geometry.as_shape(s))
+    m = pygeoif.MultiPoint(g)
+    wkt = str(m.wkt).replace("MULTIPOINT","POLYGON(") + ")"
+    SubsetOp = jpy.get_type('org.esa.snap.core.gpf.common.SubsetOp')
+    bounding_wkt = wkt
+    return bounding_wkt
