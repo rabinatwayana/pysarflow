@@ -306,3 +306,21 @@ def export(Product, output_path) -> None:
     print(f"Exporting product to {output_path} (GeoTIFF)...")
     ProductIO.writeProduct(product, output_path, "GeoTIFF")
     print("Export complete.")
+
+def stack(product1, product2):
+    # Get the Product class
+    Product = jpy.get_type('org.esa.snap.core.datamodel.Product')
+    
+    # Create a proper Java array of Products
+    products = jpy.array('org.esa.snap.core.datamodel.Product', 2)  # Corrected line
+    products[0] = product1
+    products[1] = product2
+    
+    # Set parameters
+    parameters = HashMap()
+    # No need for 'sourceProducts' parameter in BandMerge; just pass the array directly
+    stacked = GPF.createProduct('BandMerge', parameters, products)
+    return stacked
+
+
+
