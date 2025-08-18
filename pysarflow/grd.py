@@ -307,20 +307,43 @@ def export(Product, output_path) -> None:
     ProductIO.writeProduct(product, output_path, "GeoTIFF")
     print("Export complete.")
 
-def stack(product1, product2):
-    # Get the Product class
-    Product = jpy.get_type('org.esa.snap.core.datamodel.Product')
-    
-    # Create a proper Java array of Products
-    products = jpy.array('org.esa.snap.core.datamodel.Product', 2)  # Corrected line
-    products[0] = product1
-    products[1] = product2
-    
-    # Set parameters
+def stack(master_product, slave_product):
+    """
+    Stack two products by collocating slave_product to master_product.
+    This ensures geometry compatibility and merges bands.
+    """
     parameters = HashMap()
-    # No need for 'sourceProducts' parameter in BandMerge; just pass the array directly
-    stacked = GPF.createProduct('BandMerge', parameters, products)
+    parameters.put('targetProductType', 'Collocated')
+    parameters.put('resamplingType', 'NEAREST_NEIGHBOUR')   # or 'Bilinear', 'Bicubic'
+    parameters.put('renameMasterComponents', True)
+    parameters.put('renameSlaveComponents', True)
+
+    stacked = GPF.createProduct('Collocate', parameters, [master_product, slave_product])
     return stacked
 
 
+def band_difference(product_stacked):
+    band_names=list(product_stacked.getBandNames())
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+    # Create a BandDescriptor object
+    band_def = BandDescriptor()
+    band_def.name = 'Difference_Band'
+    band_def.type = 'float32'
+    band_def.expression = 'Sigma0_VV_S - Sigma0_VV_M'  # Ensure these band names exist in product_stacked
+    band_def.noDataValue = 0.0
+    band_def.description = 'Post - Pre difference'
+
+    # Create a Java array of BandDescriptor
+    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    targetBands = Array
+    targetBands[0] = band_def  # Assign band_def to the first index of the array
+
+    # Parameters HashMap
+    parameters = jpy.get_type('java.util.HashMap')()
+    parameters.put('targetBands', targetBands)
+
+    # Run BandMaths
+    diff_product = GPF.createProduct('BandMaths', parameters, product_stacked)
+    return diff_product
 

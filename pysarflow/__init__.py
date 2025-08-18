@@ -14,7 +14,7 @@ Modules:
 
 """
 
-from .grd import read_grd_product, subset_AOI, apply_orbit_file,thermal_noise_removal, border_noise_removal, radiometric_calibration, speckle_filter, terrain_correction, stack
+from .grd import read_grd_product, subset_AOI, apply_orbit_file,thermal_noise_removal, border_noise_removal, radiometric_calibration, speckle_filter, terrain_correction, stack, band_difference
 # from .slc import read_slc_product
 
-__all__ = ["read_grd_product", "subset_AOI", "apply_orbit_file", "thermal_noise_removal", "border_noise_removal", "radiometric_calibration","speckle_filter","terrain_correction","stack"]
+__all__ = ["read_grd_product", "subset_AOI", "apply_orbit_file", "thermal_noise_removal", "border_noise_removal", "radiometric_calibration","speckle_filter","terrain_correction","stack","band_difference"]
