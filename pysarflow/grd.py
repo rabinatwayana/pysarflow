@@ -308,6 +308,47 @@ def export(Product, output_path) -> None:
     print("Export complete.")
 
 
+def stack(master_product, slave_product):
+    """
+    Stack two products by collocating slave_product to master_product.
+    This ensures geometry compatibility and merges bands.
+    """
+    parameters = HashMap()
+    parameters.put('targetProductType', 'Collocated')
+    parameters.put('resamplingType', 'NEAREST_NEIGHBOUR')   # or 'Bilinear', 'Bicubic'
+    parameters.put('renameMasterComponents', True)
+    parameters.put('renameSlaveComponents', True)
+
+    stacked = GPF.createProduct('Collocate', parameters, [master_product, slave_product])
+    return stacked
+
+
+def band_difference(product_stacked):
+    band_names=list(product_stacked.getBandNames())
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+    # Create a BandDescriptor object
+    band_def = BandDescriptor()
+    band_def.name = 'Difference_Band'
+    band_def.type = 'float32'
+    band_def.expression = 'Sigma0_VV_S - Sigma0_VV_M'  # Ensure these band names exist in product_stacked
+    band_def.noDataValue = 0.0
+    band_def.description = 'Post - Pre difference'
+
+    # Create a Java array of BandDescriptor
+    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    targetBands = Array
+    targetBands[0] = band_def  # Assign band_def to the first index of the array
+
+    # Parameters HashMap
+    parameters = jpy.get_type('java.util.HashMap')()
+    parameters.put('targetBands', targetBands)
+
+    # Run BandMaths
+    diff_product = GPF.createProduct('BandMaths', parameters, product_stacked)
+    return diff_product
+
+
 def plotBand(product1, band_name1, product2=None, band_name2=None, vmin=None, vmax=None, cmap=plt.cm.binary, figsize=(10, 10)):
     """
     Plots one or two SNAP Product bands side by side.
@@ -362,5 +403,4 @@ def plotBand(product1, band_name1, product2=None, band_name2=None, vmin=None, vm
         plt.tight_layout()
         plt.show()
         return [img1, img2]
-
 
