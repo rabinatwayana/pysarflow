@@ -192,6 +192,146 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
     return out
 
 
+def topsar_split(product, burst_dict, pols=None, output_complex=True):
+    """
+    Run TOPSAR-Split using burst indices from burst_for_geometry(...).
+    """
+    Integer = jpy.get_type('java.lang.Integer')
+
+    band = burst_dict['band_name']              # e.g. 'i_IW1_VH'
+    swath = next(iw for iw in ['IW1','IW2','IW3','EW1','EW2','EW3','EW4','EW5'] if iw in band)
+
+    if pols is None:
+        pols = band.split('_')[-1]              # infer polarisation from band name
+
+    if burst_dict['geom_type'] == 'Point':
+        fb = lb = int(burst_dict['burst'])
+    else:
+        fb, lb = int(burst_dict['firstBurst']), int(burst_dict['lastBurst'])
+        if fb > lb: fb, lb = lb, fb
+
+    # Build parameters
+    params = HashMap()
+    params.put('subswath', swath)
+    params.put('selectedPolarisations', pols)
+    params.put('firstBurstIndex', Integer(fb))
+    params.put('lastBurstIndex', Integer(lb))
+    params.put('outputComplex', bool(output_complex))
+
+    # Run TOPSAR-Split
+    output = GPF.createProduct("TOPSAR-Split", params, product)
+    print(f"TOPSAR-Split applied: {swath} bursts {fb}–{lb} ({pols})")
+    return output
+
+
+def apply_orbit(product,
+                orbit_type="Sentinel Precise (Auto Download)"):
+    """
+    Run SNAP 'Apply-Orbit-File' on a Product.
+
+    orbit_type options commonly used:
+      - "Sentinel Precise (Auto Download)"   # preferred
+      - "Sentinel Restituted (Auto Download)"# fallback if precise not yet available
+      - "DORIS Precise VOR (ENVISAT)" etc.   # for other missions
+
+    Returns a new Product with orbits applied.
+    """
+    Boolean = jpy.get_type('java.lang.Boolean')
+    Integer = jpy.get_type('java.lang.Integer')
+
+    params = HashMap()
+    params.put("orbitType", orbit_type)
+    params.put("polyDegree", Integer(3))
+    params.put("continueOnFail", Boolean(True))
+
+    out = GPF.createProduct("Apply-Orbit-File", params, product)
+    print(f"Apply-Orbit-File: {orbit_type}")
+    return out
+
+def back_geocoding(products, dem_name="SRTM 1Sec HGT", ext_dem=None):
+    """
+    Run SNAP Back-Geocoding on master + list of slaves.
+
+    Args:
+        master   : SNAP Product (Apply-Orbit-File already done)
+        slaves   : list of SNAP Products (Apply-Orbit-File already done)
+        dem_name : name of DEM in SNAP auxdata (default SRTM 1Sec HGT)
+        ext_dem  : optional external DEM product
+
+    Returns:
+        SNAP Product with master + co-registered slaves
+    """
+    print("Running Back-Geocoding...")
+
+    params = HashMap()
+    params.put("demName", dem_name)
+    params.put("demResamplingMethod", "BILINEAR_INTERPOLATION")
+    params.put("resamplingType", "BILINEAR_INTERPOLATION")
+    params.put("maskOutAreaWithoutElevation", True)
+    params.put("outputDerampDemodPhase", True)
+    params.put("disableReramp", False)
+
+
+    if ext_dem is not None:
+        params.put("externalDEMFile", ext_dem)
+
+    output = GPF.createProduct("Back-Geocoding", params, products) 
+    print("Back geocoding applied!")
+    return output
+
+def run_esd(product, preset="default", **overrides):
+    """
+    Enhanced Spectral Diversity (ESD) with sensible defaults + optional overrides.
+    - product: Back-Geocoding output (master + slave(s))
+    - preset:  'default' | 'robust' | 'fast'
+    - overrides: any operator key you want to force
+    """
+    params = HashMap()
+    for k, v in esd_params(preset).items():
+        params.put(k, v)
+    # user overrides win if provided
+    for k, v in overrides.items():
+        params.put(k, v)
+    esd = GPF.createProduct("Enhanced-Spectral-Diversity", params, product)
+    return esd
+
+
+def esd_params(preset):
+    Boolean = jpy.get_type('java.lang.Boolean')
+    if preset == "robust":
+        # more forgiving in low coherence, a bit slower
+        return {
+            "cohThreshold": 0.15,            # default often ~0.2
+            "xCorrThreshold": 0.05,
+            "fineWinWidthStr": "512",
+            "fineWinHeightStr": "512",
+            "fineWinAccAzimuth": "16",
+            "fineWinAccRange": "16",
+            "fineWinOversampling": "128",
+            "estimateAzimuthShift": Boolean(True),
+            "estimateRangeShift":   Boolean(False),
+            "doNotWriteTargetBands": Boolean(False),
+        }
+    if preset == "fast":
+        # quicker; good for previews
+        return {
+            "cohThreshold": 0.2,
+            "xCorrThreshold": 0.1,
+            "fineWinWidthStr": "256",
+            "fineWinHeightStr": "256",
+            "estimateAzimuthShift": Boolean(True),
+            "estimateRangeShift":   Boolean(False),
+            "doNotWriteTargetBands": Boolean(True),  # smaller output
+        }
+    # default
+    return {
+        # let SNAP defaults mostly apply; set only stable keys
+        "estimateAzimuthShift": Boolean(True),
+        "estimateRangeShift":   Boolean(False),
+        "doNotWriteTargetBands": Boolean(False),
+    }
+
+
 def temporal_baseline(product1_path, product2_path):
     """
     Calculate and print the temporal baseline between two Sentinel-1 products.
