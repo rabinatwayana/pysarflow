@@ -23,7 +23,7 @@ import esa_snappy
 import numpy as np
 import matplotlib.pyplot as plt
 from esa_snappy import Product, ProductIO, ProductUtils, WKTReader, HashMap, GPF, jpy
-from .utils import extract_bbox
+from .utils import extract_bbox, convert_0_to_nan
 
 # Loads the SNAP operators globally when the module is imported
 GPF.getDefaultInstance().getOperatorSpiRegistry().loadOperatorSpis()
@@ -206,7 +206,7 @@ def radiometric_calibration(product, polarization, pols_selected) :
     print('\tRadiometric calibration completed.')
     return output
 
-def speckle_filter(product,filterSizeY='5', filterSizeX='5', filter="Lee", dampingFactor='2', estimateENL='true', enl='1.0', numLooksStr='1',targetWindowSizeStr='3x3',sigmaStr='0.9',anSize='50'):
+def speckle_filter(product, filterSizeY='5', filterSizeX='5', filter="Lee"):
     """
     Apply speckle filtering to a SAR product using the specified filter parameters.
 
@@ -227,46 +227,25 @@ def speckle_filter(product,filterSizeY='5', filterSizeX='5', filter="Lee", dampi
         Type of speckle filter to apply. Common options include "Lee", "Refined Lee", etc.
         Default is "Lee".
 
-    dampingFactor : str, optional
-        Damping factor used by the filter (default is '2').
-
-    estimateENL : str, optional
-        Whether to estimate the Equivalent Number of Looks (ENL) from the data.
-        Accepts 'true' or 'false' (default is 'true').
-
-    enl : str, optional
-        ENL value to use if estimateENL is false (default is '1.0').
-
-    numLooksStr : str, optional
-        Number of looks in the data (default is '1').
-
-    targetWindowSizeStr : str, optional
-        Target window size for filtering, typically in the form '3x3' (default is '3x3').
-
-    sigmaStr : str, optional
-        Sigma parameter for filter sensitivity (default is '0.9').
-
-    anSize : str, optional
-        Analysis window size used in the filtering process (default is '50').
-
     Returns:
     --------
     Product
         The filtered SAR product after applying the speckle filter.
     """
+
     band_name=list(product.getBandNames())
     parameters = HashMap()
     parameters.put('sourceBands',band_name[0])
     parameters.put('filter',filter)
     parameters.put('filterSizeX', filterSizeX)
     parameters.put('filterSizeY', filterSizeY)
-    parameters.put('dampingFactor',dampingFactor)
-    parameters.put('estimateENL',estimateENL)
-    parameters.put('enl',enl)
-    parameters.put('numLooksStr',numLooksStr)
-    parameters.put('targetWindowSizeStr',targetWindowSizeStr)
-    parameters.put('sigmaStr',sigmaStr)
-    parameters.put('anSize',anSize)
+    parameters.put('dampingFactor','2')
+    parameters.put('estimateENL','true')
+    parameters.put('enl','1.0')
+    parameters.put('numLooksStr','1')
+    parameters.put('targetWindowSizeStr','3x3')
+    parameters.put('sigmaStr','0.9')
+    parameters.put('anSize','50')
     speckle_filter_output = GPF.createProduct('Speckle-Filter',parameters,product)
     width  = speckle_filter_output.getSceneRasterWidth()
     height = speckle_filter_output.getSceneRasterHeight()
@@ -277,51 +256,29 @@ def speckle_filter(product,filterSizeY='5', filterSizeX='5', filter="Lee", dampi
     print('\tSpeckle filter completed.')
     return speckle_filter_output
 
-def convert_0_to_nan(product):
+
+def terrain_correction(product, demName='SRTM 3Sec',pixelSpacingInMeter=10.0,demResamplingMethod="BILINEAR_INTERPOLATION",imgResamplingMethod="BILINEAR_INTERPOLATION"):
     band_names = list(product.getBandNames())
-    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
-
-    # Create Java array of BandDescriptor
-    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', len(band_names))
-
-    for i, name in enumerate(band_names):
-        band_def = BandDescriptor()
-        band_def.name = name   # avoid overwrite
-        band_def.type = 'float32'
-        band_def.expression = f"{name} == 0 ? -9999.0 : {name}"
-        band_def.noDataValue = -9999.0     # match replacement value
-        Array[i] = band_def
-
-    # Parameters HashMap
-    parameters = jpy.get_type('java.util.HashMap')()
-    parameters.put('targetBands', Array)
-
-    # Run BandMaths
-    updated_product = GPF.createProduct('BandMaths', parameters, product)
-    return updated_product
-
-
-def terrain_correction(product,demName='SRTM 3Sec',sourceBands='Sigma0_VV'):
     parameters = HashMap()
     parameters.put('demName',demName)
-    # parameters.put('maskOutAreaWithoutDEM', False)
-    # parameters.put('pixelSpacingInMeter', 50.0)
     parameters.put('nodataValueAtSea', False)
-    parameters.put('sourceBands',sourceBands)
+    parameters.put('sourceBands',band_names[0])
     parameters.put('saveDem', False)  # Avoid saving DEM band
     parameters.put('saveLatLon', False) 
-    parameters.put('imgResamplingMethod', 'BILINEAR_INTERPOLATION')  # Ensure smooth interpolation
+    parameters.put('imgResamplingMethod', imgResamplingMethod)  # Ensure smooth interpolation
+    parameters.put('pixelSpacingInMeter', pixelSpacingInMeter)  # Ensure smooth interpolation
+    parameters.put('demResamplingMethod', demResamplingMethod)  # Ensure smooth interpolation
     parameters.put('noDataValue', -9999.0)
     tc_output = GPF.createProduct("Terrain-Correction", parameters,product)
 
     tc_output=convert_0_to_nan(tc_output)
 
     
-    width  = tc_output.getSceneRasterWidth()
-    height = tc_output.getSceneRasterHeight()
+    # width  = tc_output.getSceneRasterWidth()
+    # height = tc_output.getSceneRasterHeight()
 
-    print("Columns (width):", width)
-    print("Rows (height):", height)
+    # print("Columns (width):", width)
+    # print("Rows (height):", height)
 
     print('\tTerrain correction completed.')
     return tc_output
@@ -417,8 +374,6 @@ def stack(master_product, slave_product):
     stacked = GPF.createProduct('Collocate', parameters, [master_product, slave_product])
     return stacked
 
-
-
 def band_difference(product_stacked):
     band_names=list(product_stacked.getBandNames())
     BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
@@ -444,8 +399,7 @@ def band_difference(product_stacked):
     diff_product = GPF.createProduct('BandMaths', parameters, product_stacked)
     return diff_product
 
-
-def plotBand(product1, band_name1, product2=None, band_name2=None, vmin=None, vmax=None, cmap=plt.cm.binary, figsize=(10, 10)):
+def plotBand(product1, band_name1, vmin=None, vmax=None, cmap=plt.cm.binary, figsize=(10, 10)):
     """
     Plots one or two SNAP Product bands side by side.
     Axes ticks are shown, and each subplot has its own title.
@@ -474,31 +428,14 @@ def plotBand(product1, band_name1, product2=None, band_name2=None, vmin=None, vm
 
     data1 = get_band_data(product1, band_name1)
 
-    if product2 is None:
-        plt.figure(figsize=figsize)
-        img1 = plt.imshow(data1, cmap=cmap, vmin=vmin, vmax=vmax)
-        plt.xticks()
-        plt.yticks()
-        plt.title(f"Band: {band_name1}")
-        plt.show()
-        return [img1]
-    else:
-        if band_name2 is None:
-            band_name2 = band_name1
-        data2 = get_band_data(product2, band_name2)
-        fig, axes = plt.subplots(1, 2, figsize=figsize)
-        
-        img1 = axes[0].imshow(data1, cmap=cmap, vmin=vmin, vmax=vmax)
-        axes[0].tick_params(axis='both', which='both', direction='in', top=True, right=True)
-        axes[0].set_title(f"Band: {band_name1}")
-        
-        img2 = axes[1].imshow(data2, cmap=cmap, vmin=vmin, vmax=vmax)
-        axes[1].tick_params(axis='both', which='both', direction='in', top=True, right=True)
-        axes[1].set_title(f"Band: {band_name2}")
-        
-        plt.tight_layout()
-        plt.show()
-        return [img1, img2]
+    plt.figure(figsize=figsize)
+    img1 = plt.imshow(data1, cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.xticks()
+    plt.yticks()
+    plt.title(f"Band: {band_name1}")
+    plt.show()
+    return [img1]
+
 
 def generateFloodMask(product_masked, threshold=0.1):
     parameters = HashMap()
@@ -506,10 +443,9 @@ def generateFloodMask(product_masked, threshold=0.1):
 
     targetBand = BandDescriptor()
     targetBand.name = 'flooded'
-    targetBand.type = 'uint8'
+    targetBand.type = 'float32'
 
     # Threshold the masked difference band
-    # targetBand.expression = f'(Difference_Band_Masked > {threshold}) ? 1 : 2'
     targetBand.expression = f'(Difference_Band_Masked == -9999.0 ? -9999.0 : (Difference_Band_Masked == 0 ? 0 : (Difference_Band_Masked > {threshold} ? 1 : 2)))'
 
 
@@ -519,3 +455,56 @@ def generateFloodMask(product_masked, threshold=0.1):
 
     binary_flood = GPF.createProduct('BandMaths', parameters, product_masked)
     return binary_flood
+
+def preprocess_grd_product(file_path, config):
+    """
+    Preprocess Sentinel-1 product using configuration dictionary.
+    """
+
+    aoi_bbox=config["aoi_bbox"]
+    polarization=config.get("polarization", "VV")
+    pols_selected=config.get("pols_selected", None)
+    filter=config.get("speckle_filter", "Lee")
+    filterSizeX=config.get("filterSizeX", '5')
+    filterSizeY=config.get("filterSizeY", '5')
+    demName=config.get("demName", "SRTM 3Sec")
+    pixelSpacingInMeter=config.get("pixelSpacingInMeter", '10.0')
+    demResamplingMethod=config.get("demResamplingMethod", "BILINEAR_INTERPOLATION")
+    imgResamplingMethod=config.get("imgResamplingMethod", "BILINEAR_INTERPOLATION")
+
+    product = read_grd_product(file_path)
+
+    # 1. Subset AOI (optional)
+    if aoi_bbox:
+        product = subset_AOI(product=product, bbox=config["aoi_bbox"])
+
+    # 2. Apply corrections
+    product = apply_orbit_file(product)
+    product = thermal_noise_removal(product)
+    product = border_noise_removal(product)
+
+    # 3. Radiometric Calibration
+    product = radiometric_calibration(
+        product,
+        polarization=polarization,
+        pols_selected=pols_selected
+    )
+
+    # 4. Speckle Filter
+    product = speckle_filter(
+        product,
+        filter=filter,
+        filterSizeX=filterSizeX,
+        filterSizeY=filterSizeY,
+    )
+
+    # 5. Terrain Correction
+    product = terrain_correction(
+        product,
+        demName=demName,
+        pixelSpacingInMeter=pixelSpacingInMeter,
+        demResamplingMethod=demResamplingMethod,
+        imgResamplingMethod=imgResamplingMethod,
+    )
+
+    return product
