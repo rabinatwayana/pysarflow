@@ -292,7 +292,7 @@ def conversion_to_db(product):
     print('\tConversion complete.')
     return output
 
-def export(Product, output_path) -> None:
+def export(product, output_path) -> None:
     """
     Exports a SNAP product as a GeoTIFF file.
 
