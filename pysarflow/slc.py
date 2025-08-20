@@ -483,3 +483,40 @@ def topsar_deburst(product, polarization):
     output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
     print("TOPSAR Deburst applied!")
     return output
+
+def terrain_correction(product, DEM):
+    """
+    Apply terrain correction to a SAR product using a specified DEM.
+
+    Terrain correction removes geometric distortions caused by topography and sensor 
+    viewing geometry. This step geocodes the image into a map coordinate system 
+    and ensures that pixel locations align with their true geographic position.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The SAR product to which terrain correction will be applied.
+    DEM : str
+        The name of the Digital Elevation Model (e.g., 'SRTM 3Sec' or a custom DEM) 
+        to be used for terrain correction.
+
+    Returns
+    -------
+    snappy.Product
+        The terrain-corrected product.
+
+    Notes
+    -----
+    - The DEM is saved as part of the output product.
+    - Areas with missing DEM values are assigned an external no-data value (0.0).
+    - This step is typically performed near the end of the preprocessing chain to 
+      produce a geocoded product suitable for analysis and visualization.
+    """
+    parameters = HashMap()
+    print('Applying Terrain Correction...')
+    parameters.put('demName', DEM)
+    parameters.put('saveDEM', True)
+    parameters.put('externalDEMNoDataValue', 0.0)
+    output = GPF.createProduct("Terrain-Correction", parameters, product)
+    print("Terrain Correction applied!")
+    return output
