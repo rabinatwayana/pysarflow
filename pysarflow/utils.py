@@ -106,6 +106,19 @@ def extract_bbox(file_path):
 
 
 def convert_0_to_nan(product):
+    """
+    Convert all zero values in the bands of a Sentinel-1 product to NaN (represented as -9999.0).
+
+    This function iterates over all bands in the input product and replaces
+    pixels with a value of 0 with -9999.0, which is commonly used as the NoData value
+    in SNAP products. The data type of each band is set to float32 to accommodate NaN values.
+
+    Args:
+        product (esa_snappy.Product): Sentinel-1 product whose zero values need to be converted.
+
+    Returns:
+        esa_snappy.Product: A new product with zero values replaced by -9999.0 in all bands.
+    """
     band_names = list(product.getBandNames())
     BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
 

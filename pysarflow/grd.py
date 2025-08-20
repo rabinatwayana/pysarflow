@@ -258,30 +258,53 @@ def speckle_filter(product, filterSizeY='5', filterSizeX='5', filter="Lee"):
 
 
 def terrain_correction(product, demName='SRTM 3Sec',pixelSpacingInMeter=10.0,demResamplingMethod="BILINEAR_INTERPOLATION",imgResamplingMethod="BILINEAR_INTERPOLATION"):
-    band_names = list(product.getBandNames())
-    parameters = HashMap()
-    parameters.put('demName',demName)
-    parameters.put('nodataValueAtSea', False)
-    parameters.put('sourceBands',band_names[0])
-    parameters.put('saveDem', False)  # Avoid saving DEM band
-    parameters.put('saveLatLon', False) 
-    parameters.put('imgResamplingMethod', imgResamplingMethod)  # Ensure smooth interpolation
-    parameters.put('pixelSpacingInMeter', pixelSpacingInMeter)  # Ensure smooth interpolation
-    parameters.put('demResamplingMethod', demResamplingMethod)  # Ensure smooth interpolation
-    parameters.put('noDataValue', -9999.0)
-    tc_output = GPF.createProduct("Terrain-Correction", parameters,product)
+    """
+    Performs terrain correction on a SAR product using a specified DEM.  
+    This step corrects geometric distortions caused by the side-looking 
+    geometry of SAR sensors and normalizes pixel spacing.  
 
-    tc_output=convert_0_to_nan(tc_output)
+    Args:
+        product : Product
+            Input SAR product.
+        demName : str, optional
+            DEM source to use (e.g., 'SRTM 3Sec', 'Copernicus 30m').
+        pixelSpacingInMeter : float, optional
+            Output pixel spacing in meters. Default is 10.0.
+        demResamplingMethod : str, optional
+            Resampling method for DEM 
+            (e.g., 'NEAREST_NEIGHBOUR', 'BILINEAR_INTERPOLATION', 'CUBIC_CONVOLUTION').
+        imgResamplingMethod : str, optional
+            Resampling method for image bands 
+            (e.g., 'NEAREST_NEIGHBOUR', 'BILINEAR_INTERPOLATION', 'CUBIC_CONVOLUTION').
 
-    
-    # width  = tc_output.getSceneRasterWidth()
-    # height = tc_output.getSceneRasterHeight()
+    Returns:
+        esa_snappy.Product: Terrain-corrected product.
 
-    # print("Columns (width):", width)
-    # print("Rows (height):", height)
-
-    print('\tTerrain correction completed.')
-    return tc_output
+    Raises:
+        RuntimeError: If terrain correction fails during processing.
+    """
+    try:
+        band_names = list(product.getBandNames())
+        parameters = HashMap()
+        parameters.put('demName',demName)
+        parameters.put('nodataValueAtSea', False)
+        parameters.put('sourceBands',band_names[0])
+        parameters.put('saveDem', False)  # Avoid saving DEM band
+        parameters.put('saveLatLon', False) 
+        parameters.put('imgResamplingMethod', imgResamplingMethod)  # Ensure smooth interpolation
+        parameters.put('pixelSpacingInMeter', pixelSpacingInMeter)  # Ensure smooth interpolation
+        parameters.put('demResamplingMethod', demResamplingMethod)  # Ensure smooth interpolation
+        parameters.put('noDataValue', -9999.0)
+        tc_output = GPF.createProduct("Terrain-Correction", parameters,product)
+        tc_output=convert_0_to_nan(tc_output)
+        # width  = tc_output.getSceneRasterWidth()
+        # height = tc_output.getSceneRasterHeight()
+        # print("Columns (width):", width)
+        # print("Rows (height):", height)
+        print('\tTerrain correction completed.')
+        return tc_output
+    except Exception as e:
+        raise RuntimeError(f"Terrain correction failed: {e}")
 
 def conversion_to_db(product):
     """
@@ -303,45 +326,66 @@ def conversion_to_db(product):
     return output
 
 def maskPermanentWater(product):
-    # Add land cover band
-    parameters = HashMap()
-    parameters.put("landCoverNames", "GlobCover")
-    mask_with_land_cover = GPF.createProduct('AddLandCover', parameters,product)
-    del parameters
+    """
+    Masks permanent water areas in a SAR product using land cover data.
 
-    # Create binary water band
-    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
-    parameters = HashMap()
-    targetBand = BandDescriptor()
-    targetBand.name = 'BinaryWater'
-    targetBand.type = 'uint8'
-    targetBand.expression = '(land_cover_GlobCover == 210) ? 0 : 1'
-    targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
-    targetBands[0] = targetBand
-    parameters.put('targetBands', targetBands)
-    water_mask = GPF.createProduct('BandMaths', parameters, mask_with_land_cover)
+    The function first adds a land cover band to the input product, then creates a 
+    binary water mask based on GlobCover classification (210 = water). Finally, it 
+    applies the mask to the SAR product, creating a permanent water masked while 
+    preserving NoData values.
 
-    del parameters
-    parameters = HashMap()
-    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+    Args:
+        product (esa_snappy.Product): Input SAR product.
+
+    Returns:
+        esa_snappy.Product: SAR product with permanent water masked, containing
+                            a 'Difference_Band_Masked' band.
+
+    Raises:
+        RuntimeError: If masking or band math operations fail.
+    """
     try:
-        # water_mask.addBand(product.getBand("Sigma0_VV_db"))
-        water_mask.addBand(product.getBand("Sigma0_VV"))
+        print(f"Masking permanent waster based on landcover data")
+        # Add land cover band
+        parameters = HashMap()
+        parameters.put("landCoverNames", "GlobCover")
+        mask_with_land_cover = GPF.createProduct('AddLandCover', parameters,product)
+        del parameters
 
-    except:
-        pass
-    targetBand = BandDescriptor()
-    targetBand.name = "Difference_Band_Masked"
-    targetBand.type = 'float32'
-    targetBand.expression = '(Sigma0_VV == -9999.0) ? -9999.0 : ((BinaryWater == 1) ? Sigma0_VV : 0)'
-    # targetBand.expression = '(BinaryWater == 1) ? Sigma0_VV : 0'
-    # targetBand.expression = '(BinaryWater == 1) ? Difference_Band : 0'
+        # Create binary water band
+        BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+        parameters = HashMap()
+        targetBand = BandDescriptor()
+        targetBand.name = 'BinaryWater'
+        targetBand.type = 'uint8'
+        targetBand.expression = '(land_cover_GlobCover == 210) ? 0 : 1'
+        targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+        targetBands[0] = targetBand
+        parameters.put('targetBands', targetBands)
+        water_mask = GPF.createProduct('BandMaths', parameters, mask_with_land_cover)
 
-    targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
-    targetBands[0] = targetBand
-    parameters.put('targetBands', targetBands)
-    product_masked = GPF.createProduct('BandMaths', parameters, water_mask)
-    return product_masked
+        del parameters
+        parameters = HashMap()
+        BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+        try:
+            water_mask.addBand(product.getBand("Sigma0_VV"))
+        except:
+            pass
+        targetBand = BandDescriptor()
+        targetBand.name = "Permanent_Water_Masked"
+        targetBand.type = 'float32'
+        targetBand.expression = '(Sigma0_VV == -9999.0) ? -9999.0 : ((BinaryWater == 1) ? Sigma0_VV : 0)'
+        # targetBand.expression = '(BinaryWater == 1) ? Sigma0_VV : 0'
+        # targetBand.expression = '(BinaryWater == 1) ? Difference_Band : 0'
+
+        targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+        targetBands[0] = targetBand
+        parameters.put('targetBands', targetBands)
+        product_masked = GPF.createProduct('BandMaths', parameters, water_mask)
+        print("\tMasking permanent water complete.")
+        return product_masked
+    except Exception as e:
+        raise RuntimeError(f"Terrain correction failed: {e}")
 
 
 def export(product, output_path) -> None:
@@ -357,13 +401,26 @@ def export(product, output_path) -> None:
 
     print(f"Exporting product to {output_path} (GeoTIFF)...")
     ProductIO.writeProduct(product, output_path, "GeoTIFF")
-    print("Export complete.")
+    print("\tExport complete.")
 
 
 def stack(master_product, slave_product):
     """
-    Stack two products by collocating slave_product to master_product.
-    This ensures geometry compatibility and merges bands.
+    Collocates two SAR products (master and slave) into a single stacked product.
+
+    This creates a new product where the bands from the master and slave products
+    are aligned spatially. Optionally, the master and slave components can be renamed
+    to avoid conflicts.
+
+    Args:
+        master_product (esa_snappy.Product): The reference SAR product.
+        slave_product (esa_snappy.Product): The secondary SAR product to be collocated with the master.
+
+    Returns:
+        esa_snappy.Product: A new product containing collocated bands from both master and slave products.
+
+    Raises:
+        RuntimeError: If the Collocate operation fails.
     """
     parameters = HashMap()
     parameters.put('targetProductType', 'Collocated')
@@ -375,29 +432,48 @@ def stack(master_product, slave_product):
     return stacked
 
 def band_difference(product_stacked):
-    band_names=list(product_stacked.getBandNames())
-    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+    """
+    Computes the difference between two bands of a stacked SAR product.
 
-    # Create a BandDescriptor object
-    band_def = BandDescriptor()
-    band_def.name = 'Difference_Band'
-    band_def.type = 'float32'
-    band_def.expression = f'{band_names[1]} - {band_names[0]}'  # Ensure these band names exist in product_stacked
-    band_def.noDataValue = 0.0
-    band_def.description = 'Post - Pre difference'
+    A new band named 'Difference_Band' is created, calculated as:
+        Difference_Band = band2 - band1
 
-    # Create a Java array of BandDescriptor
-    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
-    targetBands = Array
-    targetBands[0] = band_def  # Assign band_def to the first index of the array
+    Args:
+        product_stacked (esa_snappy.Product): Input SAR product with at least two bands (e.g., pre- and post-event).
 
-    # Parameters HashMap
-    parameters = jpy.get_type('java.util.HashMap')()
-    parameters.put('targetBands', targetBands)
+    Returns:
+        esa_snappy.Product: A new product containing the 'Difference_Band'.
 
-    # Run BandMaths
-    diff_product = GPF.createProduct('BandMaths', parameters, product_stacked)
-    return diff_product
+    Raises:
+        RuntimeError: If the BandMaths operation fails.
+    """
+
+    try:
+        band_names=list(product_stacked.getBandNames())
+        BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+        # Create a BandDescriptor object
+        band_def = BandDescriptor()
+        band_def.name = 'Difference_Band'
+        band_def.type = 'float32'
+        band_def.expression = f'{band_names[1]} - {band_names[0]}'  # Ensure these band names exist in product_stacked
+        band_def.noDataValue = 0.0
+        band_def.description = 'Post - Pre difference'
+
+        # Create a Java array of BandDescriptor
+        Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+        targetBands = Array
+        targetBands[0] = band_def  # Assign band_def to the first index of the array
+
+        # Parameters HashMap
+        parameters = jpy.get_type('java.util.HashMap')()
+        parameters.put('targetBands', targetBands)
+
+        # Run BandMaths
+        diff_product = GPF.createProduct('BandMaths', parameters, product_stacked)
+        return diff_product
+    except Exception as e:
+        raise RuntimeError(f"Terrain correction failed: {e}")
 
 def plotBand(product1, band_name1, vmin=None, vmax=None, cmap=plt.cm.binary, figsize=(10, 10)):
     """
@@ -438,73 +514,121 @@ def plotBand(product1, band_name1, vmin=None, vmax=None, cmap=plt.cm.binary, fig
 
 
 def generateFloodMask(product_masked, threshold=0.1):
-    parameters = HashMap()
-    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+    """
+    Generates a flood mask from a masked difference band in a SAR product.
 
-    targetBand = BandDescriptor()
-    targetBand.name = 'flooded'
-    targetBand.type = 'float32'
+    The function creates a new band called 'flooded', where pixels are classified as:
+        - -9999.0: NoData
+        - 0: Permanent water
+        - 1: Flooded
+        - 2: Others
 
-    # Threshold the masked difference band
-    targetBand.expression = f'(Difference_Band_Masked == -9999.0 ? -9999.0 : (Difference_Band_Masked == 0 ? 0 : (Difference_Band_Masked > {threshold} ? 1 : 2)))'
+    Args:
+        product_masked (esa_snappy.Product): Input SAR product with masked difference band.
+        threshold (float, optional): Threshold for identifying flooded pixels. Default is 0.1.
+
+    Returns:
+        esa_snappy.Product: A new product with a 'flooded' band representing the flood mask.
+
+    Raises:
+        RuntimeError: If the BandMaths operation fails.
+    """
+    try:
+        parameters = HashMap()
+        BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+        targetBand = BandDescriptor()
+        targetBand.name = 'flooded'
+        targetBand.type = 'float32'
+
+        # Threshold the masked difference band
+        targetBand.expression = f'(Difference_Band_Masked == -9999.0 ? -9999.0 : (Difference_Band_Masked == 0 ? 0 : (Difference_Band_Masked > {threshold} ? 1 : 2)))'
 
 
-    targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
-    targetBands[0] = targetBand
-    parameters.put('targetBands', targetBands)
+        targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+        targetBands[0] = targetBand
+        parameters.put('targetBands', targetBands)
 
-    binary_flood = GPF.createProduct('BandMaths', parameters, product_masked)
-    return binary_flood
+        binary_flood = GPF.createProduct('BandMaths', parameters, product_masked)
+        return binary_flood
+    except Exception as e:
+        raise RuntimeError(f"Terrain correction failed: {e}")
 
 def preprocess_grd_product(file_path, config):
     """
-    Preprocess Sentinel-1 product using configuration dictionary.
+    Preprocess a Sentinel-1 GRD product using a given configuration.
+
+    The function performs a series of preprocessing steps including AOI subsetting,
+    orbit file application, thermal and border noise removal, radiometric calibration,
+    speckle filtering, and terrain correction.
+
+    Args:
+        file_path (str): Path to the Sentinel-1 GRD product file.
+        config (dict): Configuration dictionary containing preprocessing parameters, such as:
+            - aoi_bbox (list): Bounding box [minLon, minLat, maxLon, maxLat] for subsetting.
+            - polarization (str, optional): Polarization to calibrate, e.g., "VV" or "VH". Defaults to "VV".
+            - pols_selected (list, optional): List of polarizations to include. Defaults to None.
+            - speckle_filter (str, optional): Speckle filter type. Defaults to "Lee".
+            - filterSizeX (int or str, optional): Filter kernel size in X direction. Defaults to 5.
+            - filterSizeY (int or str, optional): Filter kernel size in Y direction. Defaults to 5.
+            - demName (str, optional): DEM name for terrain correction. Defaults to "SRTM 3Sec".
+            - pixelSpacingInMeter (float or str, optional): Pixel spacing for terrain correction. Defaults to 10.0.
+            - demResamplingMethod (str, optional): Resampling method for DEM. Defaults to "BILINEAR_INTERPOLATION".
+            - imgResamplingMethod (str, optional): Resampling method for image. Defaults to "BILINEAR_INTERPOLATION".
+
+    Returns:
+        esa_snappy.Product: Preprocessed Sentinel-1 product.
+
+    Raises:
+        RuntimeError: If any step of the preprocessing fails.
     """
+    try:
+        aoi_bbox=config["aoi_bbox"]
+        polarization=config.get("polarization", "VV")
+        pols_selected=config.get("pols_selected", None)
+        filter=config.get("speckle_filter", "Lee")
+        filterSizeX=config.get("filterSizeX", '5')
+        filterSizeY=config.get("filterSizeY", '5')
+        demName=config.get("demName", "SRTM 3Sec")
+        pixelSpacingInMeter=config.get("pixelSpacingInMeter", '10.0')
+        demResamplingMethod=config.get("demResamplingMethod", "BILINEAR_INTERPOLATION")
+        imgResamplingMethod=config.get("imgResamplingMethod", "BILINEAR_INTERPOLATION")
 
-    aoi_bbox=config["aoi_bbox"]
-    polarization=config.get("polarization", "VV")
-    pols_selected=config.get("pols_selected", None)
-    filter=config.get("speckle_filter", "Lee")
-    filterSizeX=config.get("filterSizeX", '5')
-    filterSizeY=config.get("filterSizeY", '5')
-    demName=config.get("demName", "SRTM 3Sec")
-    pixelSpacingInMeter=config.get("pixelSpacingInMeter", '10.0')
-    demResamplingMethod=config.get("demResamplingMethod", "BILINEAR_INTERPOLATION")
-    imgResamplingMethod=config.get("imgResamplingMethod", "BILINEAR_INTERPOLATION")
+        product = read_grd_product(file_path)
 
-    product = read_grd_product(file_path)
+        # 1. Subset AOI (optional)
+        if aoi_bbox:
+            product = subset_AOI(product=product, bbox=config["aoi_bbox"])
 
-    # 1. Subset AOI (optional)
-    if aoi_bbox:
-        product = subset_AOI(product=product, bbox=config["aoi_bbox"])
+        # 2. Apply corrections
+        product = apply_orbit_file(product)
+        product = thermal_noise_removal(product)
+        product = border_noise_removal(product)
 
-    # 2. Apply corrections
-    product = apply_orbit_file(product)
-    product = thermal_noise_removal(product)
-    product = border_noise_removal(product)
+        # 3. Radiometric Calibration
+        product = radiometric_calibration(
+            product,
+            polarization=polarization,
+            pols_selected=pols_selected
+        )
 
-    # 3. Radiometric Calibration
-    product = radiometric_calibration(
-        product,
-        polarization=polarization,
-        pols_selected=pols_selected
-    )
+        # 4. Speckle Filter
+        product = speckle_filter(
+            product,
+            filter=filter,
+            filterSizeX=filterSizeX,
+            filterSizeY=filterSizeY,
+        )
 
-    # 4. Speckle Filter
-    product = speckle_filter(
-        product,
-        filter=filter,
-        filterSizeX=filterSizeX,
-        filterSizeY=filterSizeY,
-    )
+        # 5. Terrain Correction
+        product = terrain_correction(
+            product,
+            demName=demName,
+            pixelSpacingInMeter=pixelSpacingInMeter,
+            demResamplingMethod=demResamplingMethod,
+            imgResamplingMethod=imgResamplingMethod,
+        )
 
-    # 5. Terrain Correction
-    product = terrain_correction(
-        product,
-        demName=demName,
-        pixelSpacingInMeter=pixelSpacingInMeter,
-        demResamplingMethod=demResamplingMethod,
-        imgResamplingMethod=imgResamplingMethod,
-    )
-
-    return product
+        return product
+    except Exception as e:
+        raise RuntimeError(f"Terrain correction failed: {e}")
