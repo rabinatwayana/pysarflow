@@ -104,6 +104,7 @@ def extract_bbox(file_path):
     bounding_wkt = wkt
     return bounding_wkt
 
+
 def convert_0_to_nan(product):
     band_names = list(product.getBandNames())
     BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
@@ -126,3 +127,54 @@ def convert_0_to_nan(product):
     # Run BandMaths
     updated_product = GPF.createProduct('BandMaths', parameters, product)
     return updated_product
+
+def extract_info(product_path):
+    """
+    Extract and display basic information about a Sentinel-1 product.
+
+    Parameters
+    ----------
+    product_path : str
+        Path to the Sentinel-1 product file.
+
+    Prints
+    ------
+    - Product name
+    - Product type
+    - Product description
+    - Scene width and height
+    - Acquisition start and end time
+    - Number of bands and their names
+
+    Notes
+    -----
+    This function uses the SNAP API to read the product and display its metadata. 
+    It disposes of the product after extraction to free resources. 
+    Useful for quickly inspecting a product before further processing.
+    """
+    product = read_product(product_path)
+    print("Product name:", product.getName())
+    print("Product type:", product.getProductType())
+    print("Description:", product.getDescription())
+    #print("Beam Mode:", check_beam_mode(product_path))
+    print("Scene width:", product.getSceneRasterWidth())
+    print("Scene height:", product.getSceneRasterHeight())
+
+    metadata = product.getMetadataRoot()
+    print("Start time:", product.getStartTime())
+    print("End time:", product.getEndTime())
+
+    print("\n Bands")
+    count = 0
+    band_names = product.getBandNames()
+    number_bands = len(list(band_names))
+    print("Number of bands:", number_bands)
+    while count < number_bands:
+        band = product.getBand(band_names[count])
+        print("Band name:", band.getName())
+        count += 1
+
+    product.dispose()
+    print("\n")
+    return
+
