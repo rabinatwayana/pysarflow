@@ -5,7 +5,7 @@ It includes common or secondary functionalities that would be used in other modu
 """
 import shapefile
 import pygeoif
-from esa_snappy import jpy
+from esa_snappy import jpy, GPF
 
 def get_subswath(aoi, product):
     """
@@ -104,6 +104,30 @@ def extract_bbox(file_path):
     bounding_wkt = wkt
     return bounding_wkt
 
+
+def convert_0_to_nan(product):
+    band_names = list(product.getBandNames())
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+    # Create Java array of BandDescriptor
+    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', len(band_names))
+
+    for i, name in enumerate(band_names):
+        band_def = BandDescriptor()
+        band_def.name = name   # avoid overwrite
+        band_def.type = 'float32'
+        band_def.expression = f"{name} == 0 ? -9999.0 : {name}"
+        band_def.noDataValue = -9999.0     # match replacement value
+        Array[i] = band_def
+
+    # Parameters HashMap
+    parameters = jpy.get_type('java.util.HashMap')()
+    parameters.put('targetBands', Array)
+
+    # Run BandMaths
+    updated_product = GPF.createProduct('BandMaths', parameters, product)
+    return updated_product
+
 def extract_info(product_path):
     """
     Extract and display basic information about a Sentinel-1 product.
@@ -153,3 +177,4 @@ def extract_info(product_path):
     product.dispose()
     print("\n")
     return
+
