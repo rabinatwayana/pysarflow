@@ -191,7 +191,6 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
 
     return out
 
-
 def topsar_split(product, burst_dict, pols=None, output_complex=True):
     """
     Run TOPSAR-Split using burst indices from burst_for_geometry(...).
@@ -420,6 +419,34 @@ def interferogram(product):
     print("Interferogram created!")
     return output
 
+def topsar_deburst(product, polarization):  
+    """
+    Apply TOPSAR deburst operation to a Sentinel-1 product.
+
+    This function removes burst discontinuities in TOPSAR acquisitions 
+    by merging bursts into a seamless image for the specified polarization. 
+    It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
+    data before further interferometric or geocoding analysis.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The input Sentinel-1 product to which the deburst operation will be applied.
+    polarization : str
+        The polarization channel to process (e.g., 'VV', 'VH', 'HH', 'HV').
+
+    Returns
+    -------
+    snappy.Product
+        The deburst-processed Sentinel-1 product.
+    """
+    parameters = HashMap()
+    print('Apply TOPSAR Deburst...')
+    parameters.put("Polarisations", polarization)
+    output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
+    print("TOPSAR Deburst applied!")
+    return output
+
 def goldstein_phase_filtering(product):
     """
     Apply Goldstein Phase Filtering to an interferogram.
@@ -505,4 +532,42 @@ def phase_to_elevation(product, DEM):
     parameters.put('externalDEMNoDataValue', 0.0)
     output = GPF.createProduct("PhaseToElevation", parameters, product)
     print("Phase to Elevation applied!")
+    return output
+
+
+def terrain_correction(product, DEM):
+    """
+    Apply terrain correction to a SAR product using a specified DEM.
+
+    Terrain correction removes geometric distortions caused by topography and sensor 
+    viewing geometry. This step geocodes the image into a map coordinate system 
+    and ensures that pixel locations align with their true geographic position.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The SAR product to which terrain correction will be applied.
+    DEM : str
+        The name of the Digital Elevation Model (e.g., 'SRTM 3Sec' or a custom DEM) 
+        to be used for terrain correction.
+
+    Returns
+    -------
+    snappy.Product
+        The terrain-corrected product.
+
+    Notes
+    -----
+    - The DEM is saved as part of the output product.
+    - Areas with missing DEM values are assigned an external no-data value (0.0).
+    - This step is typically performed near the end of the preprocessing chain to 
+      produce a geocoded product suitable for analysis and visualization.
+    """
+    parameters = HashMap()
+    print('Applying Terrain Correction...')
+    parameters.put('demName', DEM)
+    parameters.put('saveDEM', True)
+    parameters.put('externalDEMNoDataValue', 0.0)
+    output = GPF.createProduct("Terrain-Correction", parameters, product)
+    print("Terrain Correction applied!")
     return output
