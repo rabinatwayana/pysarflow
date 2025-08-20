@@ -191,6 +191,145 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
 
     return out
 
+def topsar_split(product, burst_dict, pols=None, output_complex=True):
+    """
+    Run TOPSAR-Split using burst indices from burst_for_geometry(...).
+    """
+    Integer = jpy.get_type('java.lang.Integer')
+
+    band = burst_dict['band_name']              # e.g. 'i_IW1_VH'
+    swath = next(iw for iw in ['IW1','IW2','IW3','EW1','EW2','EW3','EW4','EW5'] if iw in band)
+
+    if pols is None:
+        pols = band.split('_')[-1]              # infer polarisation from band name
+
+    if burst_dict['geom_type'] == 'Point':
+        fb = lb = int(burst_dict['burst'])
+    else:
+        fb, lb = int(burst_dict['firstBurst']), int(burst_dict['lastBurst'])
+        if fb > lb: fb, lb = lb, fb
+
+    # Build parameters
+    params = HashMap()
+    params.put('subswath', swath)
+    params.put('selectedPolarisations', pols)
+    params.put('firstBurstIndex', Integer(fb))
+    params.put('lastBurstIndex', Integer(lb))
+    params.put('outputComplex', bool(output_complex))
+
+    # Run TOPSAR-Split
+    output = GPF.createProduct("TOPSAR-Split", params, product)
+    print(f"TOPSAR-Split applied: {swath} bursts {fb}–{lb} ({pols})")
+    return output
+
+
+def apply_orbit(product,
+                orbit_type="Sentinel Precise (Auto Download)"):
+    """
+    Run SNAP 'Apply-Orbit-File' on a Product.
+
+    orbit_type options commonly used:
+      - "Sentinel Precise (Auto Download)"   # preferred
+      - "Sentinel Restituted (Auto Download)"# fallback if precise not yet available
+      - "DORIS Precise VOR (ENVISAT)" etc.   # for other missions
+
+    Returns a new Product with orbits applied.
+    """
+    Boolean = jpy.get_type('java.lang.Boolean')
+    Integer = jpy.get_type('java.lang.Integer')
+
+    params = HashMap()
+    params.put("orbitType", orbit_type)
+    params.put("polyDegree", Integer(3))
+    params.put("continueOnFail", Boolean(True))
+
+    out = GPF.createProduct("Apply-Orbit-File", params, product)
+    print(f"Apply-Orbit-File: {orbit_type}")
+    return out
+
+def back_geocoding(products, dem_name="SRTM 1Sec HGT", ext_dem=None):
+    """
+    Run SNAP Back-Geocoding on master + list of slaves.
+
+    Args:
+        master   : SNAP Product (Apply-Orbit-File already done)
+        slaves   : list of SNAP Products (Apply-Orbit-File already done)
+        dem_name : name of DEM in SNAP auxdata (default SRTM 1Sec HGT)
+        ext_dem  : optional external DEM product
+
+    Returns:
+        SNAP Product with master + co-registered slaves
+    """
+    print("Running Back-Geocoding...")
+
+    params = HashMap()
+    params.put("demName", dem_name)
+    params.put("demResamplingMethod", "BILINEAR_INTERPOLATION")
+    params.put("resamplingType", "BILINEAR_INTERPOLATION")
+    params.put("maskOutAreaWithoutElevation", True)
+    params.put("outputDerampDemodPhase", True)
+    params.put("disableReramp", False)
+
+
+    if ext_dem is not None:
+        params.put("externalDEMFile", ext_dem)
+
+    output = GPF.createProduct("Back-Geocoding", params, products) 
+    print("Back geocoding applied!")
+    return output
+
+def run_esd(product, preset="default", **overrides):
+    """
+    Enhanced Spectral Diversity (ESD) with sensible defaults + optional overrides.
+    - product: Back-Geocoding output (master + slave(s))
+    - preset:  'default' | 'robust' | 'fast'
+    - overrides: any operator key you want to force
+    """
+    params = HashMap()
+    for k, v in esd_params(preset).items():
+        params.put(k, v)
+    # user overrides win if provided
+    for k, v in overrides.items():
+        params.put(k, v)
+    esd = GPF.createProduct("Enhanced-Spectral-Diversity", params, product)
+    return esd
+
+
+def esd_params(preset):
+    Boolean = jpy.get_type('java.lang.Boolean')
+    if preset == "robust":
+        # more forgiving in low coherence, a bit slower
+        return {
+            "cohThreshold": 0.15,            # default often ~0.2
+            "xCorrThreshold": 0.05,
+            "fineWinWidthStr": "512",
+            "fineWinHeightStr": "512",
+            "fineWinAccAzimuth": "16",
+            "fineWinAccRange": "16",
+            "fineWinOversampling": "128",
+            "estimateAzimuthShift": Boolean(True),
+            "estimateRangeShift":   Boolean(False),
+            "doNotWriteTargetBands": Boolean(False),
+        }
+    if preset == "fast":
+        # quicker; good for previews
+        return {
+            "cohThreshold": 0.2,
+            "xCorrThreshold": 0.1,
+            "fineWinWidthStr": "256",
+            "fineWinHeightStr": "256",
+            "estimateAzimuthShift": Boolean(True),
+            "estimateRangeShift":   Boolean(False),
+            "doNotWriteTargetBands": Boolean(True),  # smaller output
+        }
+    # default
+    return {
+        # let SNAP defaults mostly apply; set only stable keys
+        "estimateAzimuthShift": Boolean(True),
+        "estimateRangeShift":   Boolean(False),
+        "doNotWriteTargetBands": Boolean(False),
+    }
+
 
 def temporal_baseline(product1_path, product2_path):
     """
@@ -280,6 +419,63 @@ def interferogram(product):
     print("Interferogram created!")
     return output
 
+def topsar_deburst(product, polarization):  
+    """
+    Apply TOPSAR deburst operation to a Sentinel-1 product.
+
+    This function removes burst discontinuities in TOPSAR acquisitions 
+    by merging bursts into a seamless image for the specified polarization. 
+    It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
+    data before further interferometric or geocoding analysis.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The input Sentinel-1 product to which the deburst operation will be applied.
+    polarization : str
+        The polarization channel to process (e.g., 'VV', 'VH', 'HH', 'HV').
+
+    Returns
+    -------
+    snappy.Product
+        The deburst-processed Sentinel-1 product.
+    """
+    parameters = HashMap()
+    print('Apply TOPSAR Deburst...')
+    parameters.put("Polarisations", polarization)
+    output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
+    print("TOPSAR Deburst applied!")
+    return output
+  
+  
+def topsar_deburst(product, polarization):  
+    """
+    Apply TOPSAR deburst operation to a Sentinel-1 product.
+
+    This function removes burst discontinuities in TOPSAR acquisitions 
+    by merging bursts into a seamless image for the specified polarization. 
+    It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
+    data before further interferometric or geocoding analysis.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The input Sentinel-1 product to which the deburst operation will be applied.
+    polarization : str
+        The polarization channel to process (e.g., 'VV', 'VH', 'HH', 'HV').
+
+    Returns
+    -------
+    snappy.Product
+        The deburst-processed Sentinel-1 product.
+    """
+    parameters = HashMap()
+    print('Apply TOPSAR Deburst...')
+    parameters.put("Polarisations", polarization)
+    output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
+    print("TOPSAR Deburst applied!")
+    return output  
+
 def goldstein_phase_filtering(product):
     """
     Apply Goldstein Phase Filtering to an interferogram.
@@ -365,123 +561,6 @@ def phase_to_elevation(product, DEM):
     parameters.put('externalDEMNoDataValue', 0.0)
     output = GPF.createProduct("PhaseToElevation", parameters, product)
     print("Phase to Elevation applied!")
-    return output
-
-
-def apply_orbit_file(product):
-    """
-    Apply precise orbit files to a Sentinel-1 product.
-
-    This function uses the SNAP Graph Processing Framework (GPF) to 
-    automatically download and apply the latest available Sentinel 
-    Precise Orbit Ephemerides (POEORB) to the input product. Orbit 
-    information improves geolocation accuracy and is a required step 
-    before interferometric or other advanced SAR processing.
-
-    Parameters
-    ----------
-    product : snappy.Product
-        The Sentinel-1 product to which the precise orbit file 
-        will be applied.
-
-    Returns
-    -------
-    snappy.Product
-        A new product with updated orbit state vectors.
-
-    Notes
-    -----
-    - If no new orbit file is available, the process will not fail 
-      and the product will still be returned with existing orbit 
-      information.
-    - Polynomial degree 3 is used for orbit interpolation.
-
-    Examples
-    --------
-    >>> updated_product = apply_orbit_file(product)
-    >>> print(updated_product)
-    """
-    parameters = HashMap()
-    print('Apply Orbit File...')
-    parameters.put("Orbit State Vectors", "Sentinel Precise (Auto Download)")
-    parameters.put("Polynomial Degree", 3)
-    parameters.put("Do not fail if new orbit file is not found", True)
-    output = GPF.createProduct("Apply-Orbit-File", parameters, product)
-    print("Orbit File applied!") 
-    return output
-
-
-def back_geocoding(products, DEM):
-    """
-    Apply Back-Geocoding to a stack of Sentinel-1 products using a specified DEM.
-
-    This function aligns multiple Sentinel-1 SAR products into a common geometry 
-    based on the provided Digital Elevation Model (DEM). It applies bilinear 
-    interpolation for both DEM resampling and image resampling, masks out 
-    non-elevation areas, and includes options for spectral diversity and phase 
-    corrections.
-
-    Parameters
-    ----------
-    products : Product or list of Products
-        Input Sentinel-1 product(s) to be co-registered.
-    DEM : str
-        Name of the Digital Elevation Model (e.g., "SRTM 1Sec HGT" or a custom DEM path) 
-        to be used for the back-geocoding.
-
-    Returns
-    -------
-    Product
-        A new SNAP product containing the co-registered Sentinel-1 stack after 
-        back-geocoding.
-    
-    Notes
-    -----
-    - DEM and image resampling are both performed using bilinear interpolation.
-    - Spectral diversity is disabled to improve co-registration in areas with 
-      temporal or spatial decorrelation.
-    - Outputs include deramped and demodulated phase bands.
-    """
-    parameters = HashMap()
-    print('Back geocoding ...')
-    parameters.put("Digital Elevation Model", DEM)
-    parameters.put("demResamplingMethod", "BILINEAR_INTERPOLATION")
-    parameters.put("resamplingType", "BILINEAR_INTERPOLATION")
-    parameters.put("maskOutAreaWithoutElevation", True)
-    parameters.put('disableSpectralDiversity', True)
-    parameters.put("outputDerampDemodPhase", True)
-    parameters.put("disableReramp", False)
-    #parameters.put("The list of source bands", "")
-    output = GPF.createProduct("Back-Geocoding", parameters, products) 
-    print("Back geocoding applied!")
-    return output
-
-def topsar_deburst(product, polarization):  
-    """
-    Apply TOPSAR deburst operation to a Sentinel-1 product.
-
-    This function removes burst discontinuities in TOPSAR acquisitions 
-    by merging bursts into a seamless image for the specified polarization. 
-    It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
-    data before further interferometric or geocoding analysis.
-
-    Parameters
-    ----------
-    product : snappy.Product
-        The input Sentinel-1 product to which the deburst operation will be applied.
-    polarization : str
-        The polarization channel to process (e.g., 'VV', 'VH', 'HH', 'HV').
-
-    Returns
-    -------
-    snappy.Product
-        The deburst-processed Sentinel-1 product.
-    """
-    parameters = HashMap()
-    print('Apply TOPSAR Deburst...')
-    parameters.put("Polarisations", polarization)
-    output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
-    print("TOPSAR Deburst applied!")
     return output
 
 def terrain_correction(product, DEM):
