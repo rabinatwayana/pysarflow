@@ -455,3 +455,31 @@ def back_geocoding(products, DEM):
     output = GPF.createProduct("Back-Geocoding", parameters, products) 
     print("Back geocoding applied!")
     return output
+
+def topsar_deburst(product, polarization):  
+    """
+    Apply TOPSAR deburst operation to a Sentinel-1 product.
+
+    This function removes burst discontinuities in TOPSAR acquisitions 
+    by merging bursts into a seamless image for the specified polarization. 
+    It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
+    data before further interferometric or geocoding analysis.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The input Sentinel-1 product to which the deburst operation will be applied.
+    polarization : str
+        The polarization channel to process (e.g., 'VV', 'VH', 'HH', 'HV').
+
+    Returns
+    -------
+    snappy.Product
+        The deburst-processed Sentinel-1 product.
+    """
+    parameters = HashMap()
+    print('Apply TOPSAR Deburst...')
+    parameters.put("Polarisations", polarization)
+    output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
+    print("TOPSAR Deburst applied!")
+    return output
