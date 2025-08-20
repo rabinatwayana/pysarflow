@@ -292,7 +292,7 @@ def conversion_to_db(product):
     print('\tConversion complete.')
     return output
 
-def export(Product, output_path) -> None:
+def export(product, output_path) -> None:
     """
     Exports a SNAP product as a GeoTIFF file.
 
@@ -306,3 +306,101 @@ def export(Product, output_path) -> None:
     print(f"Exporting product to {output_path} (GeoTIFF)...")
     ProductIO.writeProduct(product, output_path, "GeoTIFF")
     print("Export complete.")
+
+
+def stack(master_product, slave_product):
+    """
+    Stack two products by collocating slave_product to master_product.
+    This ensures geometry compatibility and merges bands.
+    """
+    parameters = HashMap()
+    parameters.put('targetProductType', 'Collocated')
+    parameters.put('resamplingType', 'NEAREST_NEIGHBOUR')   # or 'Bilinear', 'Bicubic'
+    parameters.put('renameMasterComponents', True)
+    parameters.put('renameSlaveComponents', True)
+
+    stacked = GPF.createProduct('Collocate', parameters, [master_product, slave_product])
+    return stacked
+
+
+def band_difference(product_stacked):
+    band_names=list(product_stacked.getBandNames())
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+    # Create a BandDescriptor object
+    band_def = BandDescriptor()
+    band_def.name = 'Difference_Band'
+    band_def.type = 'float32'
+    band_def.expression = 'Sigma0_VV_S - Sigma0_VV_M'  # Ensure these band names exist in product_stacked
+    band_def.noDataValue = 0.0
+    band_def.description = 'Post - Pre difference'
+
+    # Create a Java array of BandDescriptor
+    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    targetBands = Array
+    targetBands[0] = band_def  # Assign band_def to the first index of the array
+
+    # Parameters HashMap
+    parameters = jpy.get_type('java.util.HashMap')()
+    parameters.put('targetBands', targetBands)
+
+    # Run BandMaths
+    diff_product = GPF.createProduct('BandMaths', parameters, product_stacked)
+    return diff_product
+
+
+def plotBand(product1, band_name1, product2=None, band_name2=None, vmin=None, vmax=None, cmap=plt.cm.binary, figsize=(10, 10)):
+    """
+    Plots one or two SNAP Product bands side by side.
+    Axes ticks are shown, and each subplot has its own title.
+
+    Args:
+        product1: First SNAP Product.
+        band_name1: Band name for first product.
+        product2: Optional second SNAP Product.
+        band_name2: Band name for second product.
+        vmin, vmax: Colormap limits.
+        cmap: Colormap.
+        figsize: Figure size.
+
+    Returns:
+        list of matplotlib.image.AxesImage: The image plot objects.
+    """
+    def get_band_data(product, band_name):
+        band = product.getBand(band_name)
+        if band is None:
+            raise ValueError(f"Band '{band_name}' not found in product.")
+        w, h = band.getRasterWidth(), band.getRasterHeight()
+        data = np.zeros(w * h, np.float32)
+        band.readPixels(0, 0, w, h, data)
+        data.shape = (h, w)
+        return data
+
+    data1 = get_band_data(product1, band_name1)
+
+    if product2 is None:
+        plt.figure(figsize=figsize)
+        img1 = plt.imshow(data1, cmap=cmap, vmin=vmin, vmax=vmax)
+        plt.xticks()
+        plt.yticks()
+        plt.title(f"Band: {band_name1}")
+        plt.show()
+        return [img1]
+    else:
+        if band_name2 is None:
+            band_name2 = band_name1
+        data2 = get_band_data(product2, band_name2)
+        fig, axes = plt.subplots(1, 2, figsize=figsize)
+        
+        img1 = axes[0].imshow(data1, cmap=cmap, vmin=vmin, vmax=vmax)
+        axes[0].tick_params(axis='both', which='both', direction='in', top=True, right=True)
+        axes[0].set_title(f"Band: {band_name1}")
+        
+        img2 = axes[1].imshow(data2, cmap=cmap, vmin=vmin, vmax=vmax)
+        axes[1].tick_params(axis='both', which='both', direction='in', top=True, right=True)
+        axes[1].set_title(f"Band: {band_name2}")
+        
+        plt.tight_layout()
+        plt.show()
+        return [img1, img2]
+
