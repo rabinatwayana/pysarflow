@@ -90,6 +90,13 @@ def subset_AOI(product, bbox=[], file_path=None) :
     parameters.put('copyMetadata', True)
     parameters.put('geoRegion', geometry)
     output = GPF.createProduct('Subset', parameters, product)
+
+    width  = output.getSceneRasterWidth()
+    height = output.getSceneRasterHeight()
+
+    print("Columns (width):", width)
+    print("Rows (height):", height)
+
     print('\tProduct subsetted.')
     return output
 
@@ -199,7 +206,7 @@ def radiometric_calibration(product, polarization, pols_selected) :
     print('\tRadiometric calibration completed.')
     return output
 
-def speckle_filter(product, filterSizeY='5', filterSizeX='5', filter="Lee", dampingFactor='2', estimateENL='true', enl='1.0', numLooksStr='1',targetWindowSizeStr='3x3',sigmaStr='0.9',anSize='50'):
+def speckle_filter(product,filterSizeY='5', filterSizeX='5', filter="Lee", dampingFactor='2', estimateENL='true', enl='1.0', numLooksStr='1',targetWindowSizeStr='3x3',sigmaStr='0.9',anSize='50'):
     """
     Apply speckle filtering to a SAR product using the specified filter parameters.
 
@@ -247,8 +254,9 @@ def speckle_filter(product, filterSizeY='5', filterSizeX='5', filter="Lee", damp
     Product
         The filtered SAR product after applying the speckle filter.
     """
+    band_name=list(product.getBandNames())
     parameters = HashMap()
-    parameters.put('sourceBands','Sigma0_VV')
+    parameters.put('sourceBands',band_name[0])
     parameters.put('filter',filter)
     parameters.put('filterSizeX', filterSizeX)
     parameters.put('filterSizeY', filterSizeY)
@@ -260,16 +268,61 @@ def speckle_filter(product, filterSizeY='5', filterSizeX='5', filter="Lee", damp
     parameters.put('sigmaStr',sigmaStr)
     parameters.put('anSize',anSize)
     speckle_filter_output = GPF.createProduct('Speckle-Filter',parameters,product)
+    width  = speckle_filter_output.getSceneRasterWidth()
+    height = speckle_filter_output.getSceneRasterHeight()
+
+    print("Columns (width):", width)
+    print("Rows (height):", height)
+    
     print('\tSpeckle filter completed.')
     return speckle_filter_output
 
+def convert_0_to_nan(product):
+    band_names = list(product.getBandNames())
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
 
-def terrain_correction(product,demName='SRTM 3Sec',pixelSpacingInMeter=10.0,sourceBands='Sigma0_VV'):
+    # Create Java array of BandDescriptor
+    Array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', len(band_names))
+
+    for i, name in enumerate(band_names):
+        band_def = BandDescriptor()
+        band_def.name = name   # avoid overwrite
+        band_def.type = 'float32'
+        band_def.expression = f"{name} == 0 ? -9999.0 : {name}"
+        band_def.noDataValue = -9999.0     # match replacement value
+        Array[i] = band_def
+
+    # Parameters HashMap
+    parameters = jpy.get_type('java.util.HashMap')()
+    parameters.put('targetBands', Array)
+
+    # Run BandMaths
+    updated_product = GPF.createProduct('BandMaths', parameters, product)
+    return updated_product
+
+
+def terrain_correction(product,demName='SRTM 3Sec',sourceBands='Sigma0_VV'):
     parameters = HashMap()
     parameters.put('demName',demName)
-    parameters.put('pixelSpacingInMeter', pixelSpacingInMeter)
+    # parameters.put('maskOutAreaWithoutDEM', False)
+    # parameters.put('pixelSpacingInMeter', 50.0)
+    parameters.put('nodataValueAtSea', False)
     parameters.put('sourceBands',sourceBands)
+    parameters.put('saveDem', False)  # Avoid saving DEM band
+    parameters.put('saveLatLon', False) 
+    parameters.put('imgResamplingMethod', 'BILINEAR_INTERPOLATION')  # Ensure smooth interpolation
+    parameters.put('noDataValue', -9999.0)
     tc_output = GPF.createProduct("Terrain-Correction", parameters,product)
+
+    tc_output=convert_0_to_nan(tc_output)
+
+    
+    width  = tc_output.getSceneRasterWidth()
+    height = tc_output.getSceneRasterHeight()
+
+    print("Columns (width):", width)
+    print("Rows (height):", height)
+
     print('\tTerrain correction completed.')
     return tc_output
 
@@ -291,6 +344,48 @@ def conversion_to_db(product):
     output = GPF.createProduct('linearToFromdB', parameters, product)
     print('\tConversion complete.')
     return output
+
+def maskPermanentWater(product):
+    # Add land cover band
+    parameters = HashMap()
+    parameters.put("landCoverNames", "GlobCover")
+    mask_with_land_cover = GPF.createProduct('AddLandCover', parameters,product)
+    del parameters
+
+    # Create binary water band
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+    parameters = HashMap()
+    targetBand = BandDescriptor()
+    targetBand.name = 'BinaryWater'
+    targetBand.type = 'uint8'
+    targetBand.expression = '(land_cover_GlobCover == 210) ? 0 : 1'
+    targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    targetBands[0] = targetBand
+    parameters.put('targetBands', targetBands)
+    water_mask = GPF.createProduct('BandMaths', parameters, mask_with_land_cover)
+
+    del parameters
+    parameters = HashMap()
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+    try:
+        # water_mask.addBand(product.getBand("Sigma0_VV_db"))
+        water_mask.addBand(product.getBand("Sigma0_VV"))
+
+    except:
+        pass
+    targetBand = BandDescriptor()
+    targetBand.name = "Difference_Band_Masked"
+    targetBand.type = 'float32'
+    targetBand.expression = '(Sigma0_VV == -9999.0) ? -9999.0 : ((BinaryWater == 1) ? Sigma0_VV : 0)'
+    # targetBand.expression = '(BinaryWater == 1) ? Sigma0_VV : 0'
+    # targetBand.expression = '(BinaryWater == 1) ? Difference_Band : 0'
+
+    targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    targetBands[0] = targetBand
+    parameters.put('targetBands', targetBands)
+    product_masked = GPF.createProduct('BandMaths', parameters, water_mask)
+    return product_masked
+
 
 def export(product, output_path) -> None:
     """
@@ -323,6 +418,7 @@ def stack(master_product, slave_product):
     return stacked
 
 
+
 def band_difference(product_stacked):
     band_names=list(product_stacked.getBandNames())
     BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
@@ -331,7 +427,7 @@ def band_difference(product_stacked):
     band_def = BandDescriptor()
     band_def.name = 'Difference_Band'
     band_def.type = 'float32'
-    band_def.expression = 'Sigma0_VV_S - Sigma0_VV_M'  # Ensure these band names exist in product_stacked
+    band_def.expression = f'{band_names[1]} - {band_names[0]}'  # Ensure these band names exist in product_stacked
     band_def.noDataValue = 0.0
     band_def.description = 'Post - Pre difference'
 
@@ -404,3 +500,22 @@ def plotBand(product1, band_name1, product2=None, band_name2=None, vmin=None, vm
         plt.show()
         return [img1, img2]
 
+def generateFloodMask(product_masked, threshold=0.1):
+    parameters = HashMap()
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+
+    targetBand = BandDescriptor()
+    targetBand.name = 'flooded'
+    targetBand.type = 'uint8'
+
+    # Threshold the masked difference band
+    # targetBand.expression = f'(Difference_Band_Masked > {threshold}) ? 1 : 2'
+    targetBand.expression = f'(Difference_Band_Masked == -9999.0 ? -9999.0 : (Difference_Band_Masked == 0 ? 0 : (Difference_Band_Masked > {threshold} ? 1 : 2)))'
+
+
+    targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    targetBands[0] = targetBand
+    parameters.put('targetBands', targetBands)
+
+    binary_flood = GPF.createProduct('BandMaths', parameters, product_masked)
+    return binary_flood
