@@ -30,16 +30,19 @@ The follwoing are the steps to install exsa-snappy :
 ```bash
 conda create -n snap_env python=3.9   
 conda activate snap_env  
-python -m pip install esa-snappy
-```  
+```
+**2. Install Package**
+```bash
+pip install pysarflow 
+```
 
-**2. Install ESA SNAP Desktop**    
+**3. Install ESA SNAP Desktop**    
 Download and install ESA SNAP from the [SNAP website](https://earth.esa.int/eogateway/tools/snap).  
 During installation, enable the option to configure Python for SNAP and specify your Python executable path:  
 - Use the Python from your conda environment, e.g. *C:\Users\YourUsername\.conda\envs\snap_env\python.exe*  
 - If that does not work, try the base environment Python: for example *(C:\ProgramData\Anaconda3\python.exe)*   
 
-**3. Run the snappy-conf script to configure SNAP**  
+**4. Run the snappy-conf script to configure SNAP**  
 If you use the base environemnt python or you already have SNAP installed then,  
 Open a command prompt, navigate to SNAP’s bin folder, and run:  
 ```bash
@@ -60,11 +63,6 @@ import esa_snappy
 from esa_snappy import ProductIO 
 ```
 If no errors occur, your setup is complete! 
-Install the package thereafter.
-```bash
-pip install pysarflow
-```
-
 
 ## Documentation
 
