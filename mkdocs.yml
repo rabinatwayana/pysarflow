@@ -64,6 +64,6 @@ nav :
  - Contribute: dev.md
  - Examples:
     - SLC: examples/slc_pipeline.ipynb
-    - GRD: examples/grd_pipeline.ipynb
+    - GRD: examples/grd_flood_mapping.ipynb
 
 theme: readthedocs
