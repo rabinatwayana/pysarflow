@@ -9,3 +9,6 @@ dump/
 docs/.DS_Store
 docs/data/*
 docs/ethel_temp/
+build/
+dist/
+wheels/
