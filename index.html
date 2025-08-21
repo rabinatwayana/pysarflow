@@ -74,7 +74,7 @@
               <ul>
                   <li class="toctree-l1"><a class="reference internal" href="examples/slc_pipeline/">SLC</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="examples/grd_pipeline/">GRD</a>
+                  <li class="toctree-l1"><a class="reference internal" href="examples/grd_flood_mapping/">GRD</a>
                   </li>
               </ul>
       </div>
@@ -117,8 +117,37 @@ This library is under active development and lot of its functionality is still y
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="err">├──</span><span class="w"> </span><span class="err">utils.py</span>
 </code></pre></div>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>pysarflow
+<p>To use this package, the esa-snappy library (the Python interface for ESA SNAP) is required before installation of the pysarflow package.<br />
+The follwoing are the steps to install exsa-snappy :</p>
+<p><strong>1. Create and activate a conda environment</strong> <br />
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>conda<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>snap_env<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9<span class="w">   </span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>conda<span class="w"> </span>activate<span class="w"> </span>snap_env<span class="w">  </span>
 </code></pre></div>
+<strong>2. Install Package</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span>pysarflow<span class="w"> </span>
+</code></pre></div></p>
+<p><strong>3. Install ESA SNAP Desktop</strong>  <br />
+Download and install ESA SNAP from the <a href="https://earth.esa.int/eogateway/tools/snap">SNAP website</a>.<br />
+During installation, enable the option to configure Python for SNAP and specify your Python executable path:<br />
+- Use the Python from your conda environment, e.g. <em>C:\Users\YourUsername.conda\envs\snap_env\python.exe</em><br />
+- If that does not work, try the base environment Python: for example <em>(C:\ProgramData\Anaconda3\python.exe)</em>   </p>
+<p><strong>4. Run the snappy-conf script to configure SNAP</strong><br />
+If you use the base environemnt python or you already have SNAP installed then,<br />
+Open a command prompt, navigate to SNAP’s bin folder, and run:<br />
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">cd</span><span class="w"> </span><span class="s2">&quot;C:\Program Files\esa-snap\bin&quot;</span><span class="w">   </span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>snappy-conf<span class="w"> </span><span class="s2">&quot;C:\Users\YourUsername\.conda\envs\snap_env\python.exe&quot;</span>
+</code></pre></div>
+You should see: <em>Configuration finished successfully!</em></p>
+<p><strong>4. Verify esa-snappy works</strong><br />
+Activate your environment and open Python:<br />
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>conda<span class="w"> </span>activate<span class="w"> </span>snap_env<span class="w">  </span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>python
+</code></pre></div>
+in the Python environment, try importing:<br />
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>import<span class="w"> </span>esa_snappy<span class="w"> </span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>from<span class="w"> </span>esa_snappy<span class="w"> </span>import<span class="w"> </span>ProductIO<span class="w"> </span>
+</code></pre></div>
+If no errors occur, your setup is complete! </p>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <p>For detailed documentation and examples, see the <a href="https://rabinatwayana.github.io/pysarflow/">documentation website</a>.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
@@ -184,5 +213,5 @@ This library is under active development and lot of its functionality is still y
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-07-30 18:54:32.022536+00:00
+Build Date UTC : 2025-08-21 21:06:10.450094+00:00
 -->
