@@ -1100,5 +1100,4 @@ def plot(
         try:
             p.dispose()
         except Exception:
-
-          
+             pass

@@ -63,7 +63,7 @@ nav :
  - Reference: reference.md
  - Contribute: dev.md
  - Examples:
-    - SLC: examples/slc_pipeline.ipynb
+    - SLC: examples/slc_earthquake_mapping.ipynb
     - GRD: examples/grd_flood_mapping.ipynb
 
 theme: readthedocs
