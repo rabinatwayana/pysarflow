@@ -15,6 +15,6 @@ Modules:
 """
 
 from .grd import read_grd_product, subset_AOI, apply_orbit_file,thermal_noise_removal, border_noise_removal, radiometric_calibration, speckle_filter, terrain_correction, stack, band_difference, plotBand, maskPermanentWater, generateFloodMask,conversion_to_db, convert_0_to_nan,export,preprocess_grd_product
-from .slc import read_slc_product, burst_for_geometry,topsar_split,apply_orbit,back_geocoding,enhanced_spectral_diversity,interferogram,topsar_deburst,multilooking,goldstein_phase_filtering,phase_to_elevation,terrain_correction,save_product,plot
+from .slc import read_slc_product, burst_for_geometry,topsar_split,apply_orbit,back_geocoding,enhanced_spectral_diversity,interferogram,topsar_deburst,multilooking,goldstein_phase_filtering,snaphu_export,snaphu_unwrapping,snaphu_import,phase_to_elevation,terrain_correction_slc,save_product,plot
 # from .slc import read_slc_product
 __all__ = ["read_grd_product", "subset_AOI", "apply_orbit_file", "thermal_noise_removal", "border_noise_removal", "radiometric_calibration","speckle_filter","terrain_correction","conversion_to_db","stack","band_difference","plotBand","export","maskPermanentWater", "generateFloodMask","convert_0_to_nan","preprocess_grd_product"]

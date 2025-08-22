@@ -35,6 +35,7 @@ import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 from datetime import datetime
 from matplotlib.colors import hsv_to_rgb
+import subprocess
 
 Integer = jpy.get_type('java.lang.Integer')
 
@@ -230,15 +231,15 @@ def topsar_split(product, burst_dict, pols=None, output_complex=True):
         if fb > lb: fb, lb = lb, fb
 
     # Build parameters
-    params = HashMap()
-    params.put('subswath', swath)
-    params.put('selectedPolarisations', pols)
-    params.put('firstBurstIndex', Integer(fb))
-    params.put('lastBurstIndex', Integer(lb))
-    params.put('outputComplex', bool(output_complex))
+    parameters = HashMap()
+    parameters.put('subswath', swath)
+    parameters.put('selectedPolarisations', pols)
+    parameters.put('firstBurstIndex', Integer(fb))
+    parameters.put('lastBurstIndex', Integer(lb))
+    parameters.put('outputComplex', bool(output_complex))
 
     # Run TOPSAR-Split
-    output = GPF.createProduct("TOPSAR-Split", params, product)
+    output = GPF.createProduct("TOPSAR-Split", parameters, product)
     print(f"TOPSAR-Split applied: {swath} bursts {fb}–{lb} ({pols})")
     return output
 
@@ -263,12 +264,12 @@ def apply_orbit(product,
     Boolean = jpy.get_type('java.lang.Boolean')
     Integer = jpy.get_type('java.lang.Integer')
 
-    params = HashMap()
-    params.put("orbitType", orbit_type)
-    params.put("polyDegree", Integer(3))
-    params.put("continueOnFail", Boolean(True))
+    parameters = HashMap()
+    parameters.put("orbitType", orbit_type)
+    parameters.put("polyDegree", Integer(3))
+    parameters.put("continueOnFail", Boolean(True))
 
-    out = GPF.createProduct("Apply-Orbit-File", params, product)
+    out = GPF.createProduct("Apply-Orbit-File", parameters, product)
     print(f"Apply-Orbit-File: {orbit_type}")
     return out
 
@@ -287,19 +288,19 @@ def back_geocoding(products, dem_name="SRTM 1Sec HGT", ext_dem=None):
     """
     print("Running Back-Geocoding...")
 
-    params = HashMap()
-    params.put("demName", dem_name)
-    params.put("demResamplingMethod", "BILINEAR_INTERPOLATION")
-    params.put("resamplingType", "BILINEAR_INTERPOLATION")
-    params.put("maskOutAreaWithoutElevation", True)
-    params.put("outputDerampDemodPhase", True)
-    params.put("disableReramp", False)
+    parameters = HashMap()
+    parameters.put("demName", dem_name)
+    parameters.put("demResamplingMethod", "BILINEAR_INTERPOLATION")
+    parameters.put("resamplingType", "BILINEAR_INTERPOLATION")
+    parameters.put("maskOutAreaWithoutElevation", True)
+    parameters.put("outputDerampDemodPhase", True)
+    parameters.put("disableReramp", False)
 
 
     if ext_dem is not None:
-        params.put("externalDEMFile", ext_dem)
+        parameters.put("externalDEMFile", ext_dem)
 
-    output = GPF.createProduct("Back-Geocoding", params, products) 
+    output = GPF.createProduct("Back-Geocoding", parameters, products) 
     print("Back geocoding applied!")
     return output
 
@@ -312,7 +313,7 @@ def enhanced_spectral_diversity(product, preset="default", **overrides):
             A SNAP `Product` — usually the output of Back-Geocoding
             containing the master and one or more slave images.
         preset:
-            Convenience preset passed to `esd_params(preset)` that supplies a
+            Convenience preset passed to `esd_parameters(preset)` that supplies a
             default parameter set. Expected values:
             - `"default"` - full computation.
             - `"fast"`  – less lighter computation.
@@ -325,17 +326,17 @@ def enhanced_spectral_diversity(product, preset="default", **overrides):
     Returns:
         Product: A new SNAP `Product` with ESD refinement applied.
     """
-    params = HashMap()
-    for k, v in esd_params(preset).items():
-        params.put(k, v)
+    parameters = HashMap()
+    for k, v in esd_parameters(preset).items():
+        parameters.put(k, v)
     # user overrides win if provided
     for k, v in overrides.items():
-        params.put(k, v)
-    esd = GPF.createProduct("Enhanced-Spectral-Diversity", params, product)
+        parameters.put(k, v)
+    esd = GPF.createProduct("Enhanced-Spectral-Diversity", parameters, product)
     return esd
 
 
-def esd_params(preset): #enhanced spectral diversity params
+def esd_parameters(preset): #enhanced spectral diversity parameters
     Boolean = jpy.get_type('java.lang.Boolean')
     if preset == "fast":
         # more forgiving in low coherence, a bit slower
@@ -519,16 +520,16 @@ def multilooking(product, n_rg=3, n_az=1, source_bands=None, output_intensity=Fa
     Integer = jpy.get_type('java.lang.Integer')
     Boolean = jpy.get_type('java.lang.Boolean')
 
-    params = HashMap()
-    params.put('nRgLooks', Integer(n_rg))
-    params.put('nAzLooks', Integer(n_az))
-    params.put('outputIntensity', Boolean(output_intensity))
+    parameters = HashMap()
+    parameters.put('nRgLooks', Integer(n_rg))
+    parameters.put('nAzLooks', Integer(n_az))
+    parameters.put('outputIntensity', Boolean(output_intensity))
     if source_bands:
         if isinstance(source_bands, (list, tuple)):
             source_bands = ",".join(source_bands)
-        params.put('sourceBands', str(source_bands))
+        parameters.put('sourceBands', str(source_bands))
 
-    return GPF.createProduct('Multilook', params, product)
+    return GPF.createProduct('Multilook', parameters, product)
 
 def goldstein_phase_filtering(product):
     """
@@ -575,6 +576,170 @@ def goldstein_phase_filtering(product):
     print("Goldstein Phase Filtering applied!")
     return output
 
+def snaphu_export(xml_path, new_input_file, new_target_folder):
+    """
+    Modify a SNAP XML graph to update input and output paths, then execute it using GPT.
+
+    This function updates the SNAP XML workflow file by:
+    - Replacing the file path in the 'Read' node with the given input file.
+    - Replacing the target folder in the 'SnaphuExport' node with the given output folder.
+    After updating, it saves the modified XML and runs the graph using the `gpt` command-line tool.
+
+    Args
+    ----------
+    xml_path : str
+        Path to the SNAP XML graph file to be modified and executed.
+    new_input_file : str
+        Path to the new input file (to replace the one in the 'Read' node).
+    new_target_folder : str
+        Path to the new target folder (to replace the one in the 'SnaphuExport' node).
+
+    Returns
+    -------
+    None
+        The function prints progress updates and the output of the `gpt` execution.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the provided `xml_path` does not exist.
+    xml.etree.ElementTree.ParseError
+        If the XML file cannot be parsed.
+    subprocess.CalledProcessError
+        If the `gpt` command execution fails.
+
+    Notes
+    -----
+    - Requires SNAP's Graph Processing Tool (`gpt`) to be installed and available in the system PATH.
+    - The XML graph must contain nodes with IDs 'Read' and 'SnaphuExport' for the function to work correctly.
+    """
+    print("Snaphu exporting...")
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+
+    for node in root.findall(".//node[@id='Read']/parameters/file"):
+        node.text = new_input_file
+
+    for node in root.findall(".//node[@id='SnaphuExport']/parameters/targetFolder"):
+        node.text = new_target_folder
+
+    tree.write(xml_path, encoding="UTF-8", xml_declaration=True)
+
+    gpt_command = "gpt"  
+    result = subprocess.run([gpt_command, xml_path], capture_output=True, text=True, check=True)
+    print("Processing complete.\nOutput:\n", result.stdout)
+
+def snaphu_unwrapping(conf_file_path, snaphu_exe_path, output_directory):
+    """
+    Run the SNAPHU unwrapping process using a configuration file.
+
+    This function reads a SNAPHU configuration file, extracts the command line 
+    arguments, and executes the SNAPHU binary with those arguments in the specified 
+    output directory. It ensures the working directory exists before execution and 
+    reports success or failure after completion.
+
+    Args
+    ----------
+    conf_file_path : str
+        Path to the SNAPHU configuration file (typically generated by SNAP or manually prepared).
+    snaphu_exe_path : str
+        Path to the SNAPHU executable to be used for unwrapping.
+    output_directory : str
+        Directory where SNAPHU will be executed and output files will be stored.
+
+    Returns
+    -------
+    bool
+        True if SNAPHU unwrapping completed successfully (return code 0), 
+        False otherwise.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the configuration file does not exist.
+    IndexError
+        If the configuration file has fewer than 7 lines (expected command at line 7).
+    subprocess.SubprocessError
+        If there is an unexpected error while executing the SNAPHU command.
+
+    Notes
+    -----
+    - The function assumes that the unwrapping command is located on line 7 of the configuration file.
+    - Any leading '#' or 'snaphu' prefixes in the command line will be stripped before execution.
+    - Requires SNAPHU to be compiled and available at the specified `snaphu_exe_path`.
+    """
+    with open(conf_file_path, 'r') as file:
+        lines = file.readlines()
+        
+    if len(lines) <= 6:
+        raise IndexError("Configuration file doesn't have enough lines")
+        
+    command_line = lines[6].strip()
+    
+    if command_line.startswith('#'):
+        command_line = command_line[1:].strip()
+    if command_line.startswith('snaphu'):
+        command_line = command_line[6:].strip()
+    
+    full_command = f'"{snaphu_exe_path}" {command_line}'
+    
+    print(f"Running SNAPHU command: {full_command}")
+    print(f"Working directory: {output_directory}")
+    
+    os.makedirs(output_directory, exist_ok=True)
+    
+    result = subprocess.run(
+        full_command,
+        cwd=output_directory,
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    
+    if result.returncode == 0:
+        print("SNAPHU unwrapping completed successfully!")
+        print("Output:", result.stdout)
+    else:
+        print("SNAPHU unwrapping failed!")
+        print("Error:", result.stderr)
+        print("Return code:", result.returncode)
+    return result.returncode == 0
+
+def snaphu_import(source_product, unwrapped_product): 
+    """
+    Import SNAPHU unwrapped interferogram results back into SNAP.
+
+    This function uses SNAP's Graph Processing Framework (GPF) to merge the 
+    unwrapped interferogram produced by SNAPHU with the original source product. 
+    The resulting product contains the unwrapped phase information, making it 
+    available for further processing within SNAP.
+
+    Args
+    ----------
+    source_product : snappy.Product
+        The original interferogram product before SNAPHU unwrapping.
+    unwrapped_product : snappy.Product
+        The product containing the SNAPHU unwrapped interferogram.
+
+    Returns
+    -------
+    snappy.Product
+        A SNAP product containing the imported unwrapped phase data.
+
+    Notes
+    -----
+    - The parameter `'doNotKeepWrapped'` is set to False to keep the wrapped phase 
+      along with the unwrapped phase.
+    - Requires SNAP's snappy module and the GPF operator `'SnaphuImport'`.
+    """ 
+    parameters = HashMap()
+    print("SNAPHU importing...")
+    parameters.put('doNotKeepWrapped', False)
+    products = [source_product, unwrapped_product]
+    output = GPF.createProduct('SnaphuImport', parameters, products)
+    print("SNAPHU imported...")
+    return output
+
 def phase_to_elevation(product, DEM):
     """
     Convert unwrapped interferometric phase to elevation using a Digital Elevation Model (DEM).
@@ -617,7 +782,7 @@ def phase_to_elevation(product, DEM):
     print("Phase to Elevation applied!")
     return output
 
-def terrain_correction(product, DEM):
+def terrain_correction_slc(product, DEM):
     """
     Apply terrain correction to a SAR product using a specified DEM.
 
@@ -773,167 +938,3 @@ def plot(
             p.dispose()
         except Exception:
             pass
-
-def snaphu_export(xml_path, new_input_file, new_target_folder):
-    """
-    Modify a SNAP XML graph to update input and output paths, then execute it using GPT.
-
-    This function updates the SNAP XML workflow file by:
-    - Replacing the file path in the 'Read' node with the given input file.
-    - Replacing the target folder in the 'SnaphuExport' node with the given output folder.
-    After updating, it saves the modified XML and runs the graph using the `gpt` command-line tool.
-
-    Parameters
-    ----------
-    xml_path : str
-        Path to the SNAP XML graph file to be modified and executed.
-    new_input_file : str
-        Path to the new input file (to replace the one in the 'Read' node).
-    new_target_folder : str
-        Path to the new target folder (to replace the one in the 'SnaphuExport' node).
-
-    Returns
-    -------
-    None
-        The function prints progress updates and the output of the `gpt` execution.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the provided `xml_path` does not exist.
-    xml.etree.ElementTree.ParseError
-        If the XML file cannot be parsed.
-    subprocess.CalledProcessError
-        If the `gpt` command execution fails.
-
-    Notes
-    -----
-    - Requires SNAP's Graph Processing Tool (`gpt`) to be installed and available in the system PATH.
-    - The XML graph must contain nodes with IDs 'Read' and 'SnaphuExport' for the function to work correctly.
-    """
-    print("Snaphu exporting...")
-    tree = ET.parse(xml_path)
-    root = tree.getroot()
-
-    for node in root.findall(".//node[@id='Read']/parameters/file"):
-        node.text = new_input_file
-
-    for node in root.findall(".//node[@id='SnaphuExport']/parameters/targetFolder"):
-        node.text = new_target_folder
-
-    tree.write(xml_path, encoding="UTF-8", xml_declaration=True)
-
-    gpt_command = "gpt"  
-    result = subprocess.run([gpt_command, xml_path], capture_output=True, text=True, check=True)
-    print("Processing complete.\nOutput:\n", result.stdout)
-
-def snaphu_unwrapping(conf_file_path, snaphu_exe_path, output_directory):
-    """
-    Run the SNAPHU unwrapping process using a configuration file.
-
-    This function reads a SNAPHU configuration file, extracts the command line 
-    arguments, and executes the SNAPHU binary with those arguments in the specified 
-    output directory. It ensures the working directory exists before execution and 
-    reports success or failure after completion.
-
-    Parameters
-    ----------
-    conf_file_path : str
-        Path to the SNAPHU configuration file (typically generated by SNAP or manually prepared).
-    snaphu_exe_path : str
-        Path to the SNAPHU executable to be used for unwrapping.
-    output_directory : str
-        Directory where SNAPHU will be executed and output files will be stored.
-
-    Returns
-    -------
-    bool
-        True if SNAPHU unwrapping completed successfully (return code 0), 
-        False otherwise.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the configuration file does not exist.
-    IndexError
-        If the configuration file has fewer than 7 lines (expected command at line 7).
-    subprocess.SubprocessError
-        If there is an unexpected error while executing the SNAPHU command.
-
-    Notes
-    -----
-    - The function assumes that the unwrapping command is located on line 7 of the configuration file.
-    - Any leading '#' or 'snaphu' prefixes in the command line will be stripped before execution.
-    - Requires SNAPHU to be compiled and available at the specified `snaphu_exe_path`.
-    """
-    with open(conf_file_path, 'r') as file:
-        lines = file.readlines()
-        
-    if len(lines) <= 6:
-        raise IndexError("Configuration file doesn't have enough lines")
-        
-    command_line = lines[6].strip()
-    
-    if command_line.startswith('#'):
-        command_line = command_line[1:].strip()
-    if command_line.startswith('snaphu'):
-        command_line = command_line[6:].strip()
-    
-    full_command = f'"{snaphu_exe_path}" {command_line}'
-    
-    print(f"Running SNAPHU command: {full_command}")
-    print(f"Working directory: {output_directory}")
-    
-    os.makedirs(output_directory, exist_ok=True)
-    
-    result = subprocess.run(
-        full_command,
-        cwd=output_directory,
-        shell=True,
-        capture_output=True,
-        text=True
-    )
-    
-    if result.returncode == 0:
-        print("SNAPHU unwrapping completed successfully!")
-        print("Output:", result.stdout)
-    else:
-        print("SNAPHU unwrapping failed!")
-        print("Error:", result.stderr)
-        print("Return code:", result.returncode)
-    return result.returncode == 0
-
-def snaphu_import(source_product, unwrapped_product): 
-    """
-    Import SNAPHU unwrapped interferogram results back into SNAP.
-
-    This function uses SNAP's Graph Processing Framework (GPF) to merge the 
-    unwrapped interferogram produced by SNAPHU with the original source product. 
-    The resulting product contains the unwrapped phase information, making it 
-    available for further processing within SNAP.
-
-    Parameters
-    ----------
-    source_product : snappy.Product
-        The original interferogram product before SNAPHU unwrapping.
-    unwrapped_product : snappy.Product
-        The product containing the SNAPHU unwrapped interferogram.
-
-    Returns
-    -------
-    snappy.Product
-        A SNAP product containing the imported unwrapped phase data.
-
-    Notes
-    -----
-    - The parameter `'doNotKeepWrapped'` is set to False to keep the wrapped phase 
-      along with the unwrapped phase.
-    - Requires SNAP's snappy module and the GPF operator `'SnaphuImport'`.
-    """ 
-    parameters = HashMap()
-    print("SNAPHU importing...")
-    parameters.put('doNotKeepWrapped', False)
-    products = [source_product, unwrapped_product]
-    output = GPF.createProduct('SnaphuImport', parameters, products)
-    print("SNAPHU imported...")
-    return output
