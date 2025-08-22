@@ -34,6 +34,9 @@ import geopandas as gpd
 import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 from datetime import datetime
+from matplotlib.colors import hsv_to_rgb
+
+Integer = jpy.get_type('java.lang.Integer')
 
 
 def read_slc_product(product_path):
@@ -325,11 +328,26 @@ def esd_params(preset):
     # default
     return {
         # let SNAP defaults mostly apply; set only stable keys
-        "estimateAzimuthShift": Boolean(True),
-        "estimateRangeShift":   Boolean(False),
-        "doNotWriteTargetBands": Boolean(False),
-    }
+        "fineWinWidthStr": "512",
+        "fineWinHeightStr": "512",
+        "fineWinAccAzimuth": "16",
+        "fineWinAccRange": "16",
+        "fineWinOversampling": "128",
+        "esdEstimator": "Periodogram",
+        "weightFunc": "Inv Quadratic",
+        "temporalBaselineType": "Number of images",
+        "integrationMethod": "L1 and L2",
+        "xCorrThreshold": 0.1,
+        "cohThreshold": 0.3,
+        "overallRangeShift": 0.0,
+        "overallAzimuthShift": 0.0,
+        "numBlocksPerOverlap": Integer(10),
+        "maxTemporalBaseline":Integer(2),
+        "doNotWriteTargetBands": False,
+        "useSuppliedRangeShift": False,
+        "useSuppliedAzimuthShift": False
 
+    }
 
 def temporal_baseline(product1_path, product2_path):
     """
@@ -476,6 +494,34 @@ def topsar_deburst(product, polarization):
     print("TOPSAR Deburst applied!")
     return output  
 
+def multilook(product, n_rg=3, n_az=1, source_bands=None, output_intensity=False):
+    """
+    SNAP 'Multilook' operator.
+
+    Args:
+      product         : SNAP Product (typically AFTER TOPSAR-Deburst)
+      n_rg (int)      : number of looks in range (speckle ↓, res ↓)
+      n_az (int)      : number of looks in azimuth
+      source_bands    : optional list/CSV of bands to process (e.g. 'i_*,q_*,coh_*')
+      output_intensity: for complex inputs, also write intensity bands
+
+    Returns:
+      SNAP Product with multilooked bands
+    """
+    Integer = jpy.get_type('java.lang.Integer')
+    Boolean = jpy.get_type('java.lang.Boolean')
+
+    params = HashMap()
+    params.put('nRgLooks', Integer(n_rg))
+    params.put('nAzLooks', Integer(n_az))
+    params.put('outputIntensity', Boolean(output_intensity))
+    if source_bands:
+        if isinstance(source_bands, (list, tuple)):
+            source_bands = ",".join(source_bands)
+        params.put('sourceBands', str(source_bands))
+
+    return GPF.createProduct('Multilook', params, product)
+
 def goldstein_phase_filtering(product):
     """
     Apply Goldstein Phase Filtering to an interferogram.
@@ -599,3 +645,124 @@ def terrain_correction(product, DEM):
     output = GPF.createProduct("Terrain-Correction", parameters, product)
     print("Terrain Correction applied!")
     return output
+
+def save_product(product, filename, output_dir="_results", fmt="BEAM-DIMAP"):
+    """
+    Save a SNAP product to disk.
+
+    Parameters
+    ----------
+    product : snappy.Product
+        The SNAP product to save.
+    filename : str
+        Output filename (without extension).
+    output_dir : str, optional
+        Directory where results will be saved (default: "_results").
+    fmt : str, optional
+        Output format (default: "BEAM-DIMAP").
+
+    Returns
+    -------
+    str
+        The full output path where the product was saved.
+    """
+    out_path = f"{output_dir}/{filename}"
+    print(f"Saving product to {out_path} ({fmt})...")
+    ProductIO.writeProduct(product, out_path, fmt)
+    print("Product saved successfully.")
+    return out_path
+
+
+def plot(
+    dim_path,
+    i_band=None, q_band=None, coh_band=None,
+    downsample=1,
+    fade=(0.2, 0.8),          # (min,max) brightness from coherence
+    title="",
+    save_path=None,
+    return_rgb=False,
+    ax=None,
+):
+    """
+    Visualize a multilooked interferogram as SNAP-like rainbow (HSV).
+
+    Args:
+      dim_path   : path to the .dim file (next to the .data/ folder)
+      i_band     : name of the real (i) interferogram band; auto-detected if None
+      q_band     : name of the imag (q) interferogram band; auto-detected if None
+      coh_band   : name of the coherence band; auto-detected if None
+      downsample : integer stride for quick viewing (e.g., 2, 4)
+      fade       : tuple (v_min, v_max) mapping coherence → value (brightness)
+      title      : plot title
+      save_path  : if set, write the RGB to this path (e.g., 'phase.png')
+      return_rgb : if True, return the RGB numpy array
+      ax         : optional matplotlib axes to draw on
+
+    Returns:
+      rgb (H,W,3) array if return_rgb=True, else None.
+    """
+    p = ProductIO.readProduct(dim_path)
+    try:
+        # --- band auto-detect (if names not given) ---
+        names = list(p.getBandNames())
+        def pick(prefix):
+            for n in names:
+                nn = n.lower()
+                if nn.startswith(prefix):  # strict startswith
+                    return n
+            for n in names:                 # fallback: contains
+                if prefix in n.lower():
+                    return n
+            return None
+
+        i_band  = i_band  or pick('i_ifg')
+        q_band  = q_band  or pick('q_ifg')
+        coh_band = coh_band or pick('coh_')
+
+        if not (i_band and q_band and coh_band):
+            raise ValueError(
+                f"Could not find required bands. "
+                f"i_band={i_band}, q_band={q_band}, coh_band={coh_band}. "
+                f"Available: {names[:12]}{' ...' if len(names)>12 else ''}"
+            )
+
+        w, h = p.getSceneRasterWidth(), p.getSceneRasterHeight()
+        buf = np.zeros(w*h, np.float32)
+
+        bi = p.getBand(i_band); bi.readPixels(0,0,w,h,buf); i = buf.reshape(h,w).copy()
+        bq = p.getBand(q_band); bq.readPixels(0,0,w,h,buf); q = buf.reshape(h,w).copy()
+        bc = p.getBand(coh_band); bc.readPixels(0,0,w,h,buf); coh = buf.reshape(h,w).copy()
+
+        if downsample and downsample > 1:
+            s = slice(None, None, int(downsample))
+            i, q, coh = i[s, s], q[s, s], coh[s, s]
+
+        # --- phase → HSV ---
+        phase = np.arctan2(q, i)                         # [-pi, +pi]
+        hue   = (phase + np.pi) / (2*np.pi)              # [0,1]
+        sat   = np.ones_like(hue)
+        vmin, vmax = fade
+        val   = vmin + (vmax - vmin) * np.clip(coh, 0, 1)
+
+        rgb = hsv_to_rgb(np.dstack([hue, sat, val]))
+
+        # --- plot ---
+        if ax is None:
+            plt.figure(figsize=(10, 6))
+            ax = plt.gca()
+        ax.imshow(rgb, origin="upper")
+        ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(title)
+
+        if save_path:
+            # matplotlib expects 0..1 floats; rgb already is
+            plt.imsave(save_path, rgb)
+
+        return rgb if return_rgb else None
+
+    finally:
+        try:
+            p.dispose()
+        except Exception:
+            pass
+
