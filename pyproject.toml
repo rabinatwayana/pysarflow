@@ -11,7 +11,7 @@ authors = [
 ]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = "==3.9.23"
+requires-python = ">=3.9.23, <3.12.13"
 keywords = ["sar", "sarpy"]
 classifiers = [
   "Natural Language :: English",
