@@ -2,22 +2,22 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://rabinatwayana.github.io/pysarflow/</loc>
-         <lastmod>2025-08-21</lastmod>
+         <lastmod>2025-08-22</lastmod>
     </url>
     <url>
          <loc>https://rabinatwayana.github.io/pysarflow/dev/</loc>
-         <lastmod>2025-08-21</lastmod>
+         <lastmod>2025-08-22</lastmod>
     </url>
     <url>
          <loc>https://rabinatwayana.github.io/pysarflow/reference/</loc>
-         <lastmod>2025-08-21</lastmod>
+         <lastmod>2025-08-22</lastmod>
     </url>
     <url>
          <loc>https://rabinatwayana.github.io/pysarflow/examples/grd_flood_mapping/</loc>
-         <lastmod>2025-08-21</lastmod>
+         <lastmod>2025-08-22</lastmod>
     </url>
     <url>
-         <loc>https://rabinatwayana.github.io/pysarflow/examples/slc_pipeline/</loc>
-         <lastmod>2025-08-21</lastmod>
+         <loc>https://rabinatwayana.github.io/pysarflow/examples/slc_earthquake_mapping/</loc>
+         <lastmod>2025-08-22</lastmod>
     </url>
 </urlset>

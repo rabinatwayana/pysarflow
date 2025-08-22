@@ -72,7 +72,7 @@
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
-                  <li class="toctree-l1"><a class="reference internal" href="examples/slc_pipeline/">SLC</a>
+                  <li class="toctree-l1"><a class="reference internal" href="examples/slc_earthquake_mapping/">SLC</a>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="examples/grd_flood_mapping/">GRD</a>
                   </li>
@@ -109,6 +109,7 @@ This library is under active development and lot of its functionality is still y
 </blockquote>
 <h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
 <p>Despite the growing usage of SAR data, the processing workflow remains complex and still relies on specialized heavy desktop tools creating huge barriers for students and non-experts. There is a growing need for a modular, open-source and user-friendly workflow that can take Level-1 SAR products and guide users through essential steps ideally ending in products that are usable and compatible with geospatial pipelines.</p>
+<p>The project uses the esa-snappy library, a wrapper around the SNAP Java engine, which is the same core engine used by the SNAP Desktop application. Pysarflow package provides functionality similar to what is available in SNAP Desktop, but offers a Python-based interface to access and use them.</p>
 <h2 id="project-structure">Project Structure<a class="headerlink" href="#project-structure" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="err">pysarflow/</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="err">├──</span><span class="w"> </span><span class="err">__init__.py</span>
@@ -117,7 +118,7 @@ This library is under active development and lot of its functionality is still y
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="err">├──</span><span class="w"> </span><span class="err">utils.py</span>
 </code></pre></div>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
-<p>To use this package, the esa-snappy library (the Python interface for ESA SNAP) is required before installation of the pysarflow package.<br />
+<p>To use this package, the esa-snappy library (the Python wrapper for ESA SNAP) is required before installation of the pysarflow package.<br />
 The follwoing are the steps to install exsa-snappy :</p>
 <p><strong>1. Create and activate a conda environment</strong> <br />
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>conda<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>snap_env<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9<span class="w">   </span>
@@ -156,7 +157,7 @@ If no errors occur, your setup is complete! </p>
 <p>Contributions are welcome! Follow <a href="./docs/dev.md">dev setup guide</a> &amp; Please feel free to submit a Pull Request.</p>
 <h2 id="acknowledgments">Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>
 <ul>
-<li>This library is build as a part of python software development course at Paris Lodron University Salzburg</li>
+<li>This library is built as a part of python software development course at Paris Lodron University Salzburg</li>
 <li>Built on top of powerful open-source libraries like numpy, rasterio</li>
 </ul>
 <h2 id="contributors">Contributors<a class="headerlink" href="#contributors" title="Permanent link">&para;</a></h2>
@@ -213,5 +214,5 @@ If no errors occur, your setup is complete! </p>
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-08-21 21:06:10.450094+00:00
+Build Date UTC : 2025-08-22 19:40:38.719270+00:00
 -->
