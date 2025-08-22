@@ -72,7 +72,7 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
     Determine TOPS burst index (or range) for a geometry in a Sentinel-1 IW SLC.
 
     Args:
-      product   : SNAP Product (ProductIO.readProduct(...))
+      product   : Input SAR product.
       safe_dir  : path to the *.SAFE folder (str or Path)
       geom      : Shapely Point/Polygon, or WKT string, or bbox tuple (minlon,minlat,maxlon,maxlat)
       subswath  : optional 'IW1'|'IW2'|'IW3' to force a swath
@@ -88,6 +88,17 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
         'lastBurst': 6,          # for Polygon
         'geom_type': 'Point'|'Polygon'
       }
+
+    Raises:
+
+        ValueError: 
+        - If geom is not a Shapely Point/Polygon, a WKT string, or a 4-element bbox ``(minx, miny, maxx, maxy)``
+        - If the geometry lies outside the products IW1/IW2/IW3 coverage.
+        - If the AOI polygon does not intersect the chosen sub-swath.
+
+        FileNotFoundError:
+        - If no annotation XML file is found for the selected sub-swath
+
     """
 
     # --- normalize geometry ---
@@ -166,7 +177,7 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
         linesPerBurst = max(1, (first_lines[1] - first_lines[0]) if len(first_lines) == 2 else H // max(1, numberOfBursts))
 
     out = {
-        "swath": chosen_sw,
+        "sub-swath": chosen_sw,
         "band_name": chosen_band_name,
         "linesPerBurst": linesPerBurst,
         "numberOfBursts": numberOfBursts,
@@ -197,9 +208,15 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
 def topsar_split(product, burst_dict, pols=None, output_complex=True):
     """
     Run TOPSAR-Split using burst indices from burst_for_geometry(...).
-    """
-    Integer = jpy.get_type('java.lang.Integer')
 
+    Args:
+      product : Input SAR product. Output of the burst_for_geometry
+      burst_dict : output from the burst_for_geometry function
+      pols = polarization
+
+    Returns
+        Product restricted to the specified sub-swath, burst range, and polarisations.
+    """
     band = burst_dict['band_name']              # e.g. 'i_IW1_VH'
     swath = next(iw for iw in ['IW1','IW2','IW3','EW1','EW2','EW3','EW4','EW5'] if iw in band)
 
@@ -231,12 +248,17 @@ def apply_orbit(product,
     """
     Run SNAP 'Apply-Orbit-File' on a Product.
 
-    orbit_type options commonly used:
-      - "Sentinel Precise (Auto Download)"   # preferred
-      - "Sentinel Restituted (Auto Download)"# fallback if precise not yet available
-      - "DORIS Precise VOR (ENVISAT)" etc.   # for other missions
+    Args:
+        product:
+            Input product to process. Ouput of TOPSAR-split
+        orbit_type:
+            The orbit source/type to use. Common values include:
+              - `"Sentinel Precise (Auto Download)"` – preferred.
+              - `"Sentinel Restituted (Auto Download)"` – fallback if precise is not yet available.
+              - `"DORIS Precise VOR (ENVISAT)"` – for other missions.
 
-    Returns a new Product with orbits applied.
+    Returns:
+        Product: A new SNAP `Product` with orbits applied.
     """
     Boolean = jpy.get_type('java.lang.Boolean')
     Integer = jpy.get_type('java.lang.Integer')
@@ -252,16 +274,16 @@ def apply_orbit(product,
 
 def back_geocoding(products, dem_name="SRTM 1Sec HGT", ext_dem=None):
     """
-    Run SNAP Back-Geocoding on master + list of slaves.
+    Run SNAP Back-Geocoding on master + slave(s).
 
     Args:
-        master   : SNAP Product (Apply-Orbit-File already done)
-        slaves   : list of SNAP Products (Apply-Orbit-File already done)
+        master   : SNAP Product (Apply-Orbit-File already done). Output of the apply orbit
+        slaves   : list of SNAP Products (Apply-Orbit-File already done). Output of the apply orbit 
         dem_name : name of DEM in SNAP auxdata (default SRTM 1Sec HGT)
         ext_dem  : optional external DEM product
 
     Returns:
-        SNAP Product with master + co-registered slaves
+        SNAP Product with master + co-registered slave or slaves
     """
     print("Running Back-Geocoding...")
 
@@ -284,9 +306,24 @@ def back_geocoding(products, dem_name="SRTM 1Sec HGT", ext_dem=None):
 def enhanced_spectral_diversity(product, preset="default", **overrides):
     """
     Enhanced Spectral Diversity (ESD) with sensible defaults + optional overrides.
-    - product: Back-Geocoding output (master + slave(s))
-    - preset:  'default' | 'robust' | 'fast'
-    - overrides: any operator key you want to force
+
+     Args:
+        product:
+            A SNAP `Product` — usually the output of Back-Geocoding
+            containing the master and one or more slave images.
+        preset:
+            Convenience preset passed to `esd_params(preset)` that supplies a
+            default parameter set. Expected values:
+            - `"default"` - full computation.
+            - `"fast"`  – less lighter computation.
+            - `"faster"`    – lighter computation.
+        **overrides:
+            Any ESD operator parameter you want to force/override from the
+            preset (e.g., `cohWinAz=5`, `cohWinRg=10`, `maxIterations=25`,
+            etc.). Keys must match the operator's parameter names.
+
+    Returns:
+        Product: A new SNAP `Product` with ESD refinement applied.
     """
     params = HashMap()
     for k, v in esd_params(preset).items():
@@ -298,9 +335,9 @@ def enhanced_spectral_diversity(product, preset="default", **overrides):
     return esd
 
 
-def esd_params(preset):
+def esd_params(preset): #enhanced spectral diversity params
     Boolean = jpy.get_type('java.lang.Boolean')
-    if preset == "robust":
+    if preset == "fast":
         # more forgiving in low coherence, a bit slower
         return {
             "cohThreshold": 0.15,            # default often ~0.2
@@ -314,7 +351,7 @@ def esd_params(preset):
             "estimateRangeShift":   Boolean(False),
             "doNotWriteTargetBands": Boolean(False),
         }
-    if preset == "fast":
+    if preset == "faster":
         # quicker; good for previews
         return {
             "cohThreshold": 0.2,
@@ -358,7 +395,7 @@ def temporal_baseline(product1_path, product2_path):
     commonly used in interferometric SAR (InSAR) analysis to assess the temporal 
     separation between image acquisitions.
 
-    Parameters:
+    Args:
     ----------
     product1_path : str
         File path to the first Sentinel-1 product (e.g., the master image).
@@ -376,8 +413,8 @@ def temporal_baseline(product1_path, product2_path):
     - It assumes that both products contain valid start time metadata.
     - Resources are released after processing by calling `.dispose()` on each product.
     """
-    product1 =  read_product(product1_path)
-    product2 =  read_product(product2_path)
+    product1 =  read_slc_product(product1_path)
+    product2 =  read_slc_product(product2_path)
     master_time = product1.getStartTime()
     slave_time = product2.getStartTime()
     temporal_baseline = abs(slave_time.getMJD() - master_time.getMJD())
@@ -399,7 +436,7 @@ def interferogram(product):
     interferometric SAR (InSAR) processing for deriving surface deformation, 
     elevation models, or coherence analysis.
 
-    Parameters:
+    Args:
     ----------
     product : org.esa.snap.core.datamodel.Product
         The co-registered Sentinel-1 product (usually the output of the 
@@ -446,7 +483,7 @@ def topsar_deburst(product, polarization):
     It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
     data before further interferometric or geocoding analysis.
 
-    Parameters
+    Args
     ----------
     product : snappy.Product
         The input Sentinel-1 product to which the deburst operation will be applied.
@@ -502,7 +539,7 @@ def goldstein_phase_filtering(product):
     the phase fringes, improving the quality of unwrapping and subsequent deformation 
     analysis.
 
-    Parameters:
+    Args:
     ----------
     product : org.esa.snap.core.datamodel.Product
         The input product containing the interferometric phase, typically the 
@@ -547,7 +584,7 @@ def phase_to_elevation(product, DEM):
     elevation map by referencing a known DEM. This step is commonly used in 
     Differential InSAR (DInSAR) or when generating DEMs from SAR data.
 
-    Parameters:
+    Args:
     ----------
     product : org.esa.snap.core.datamodel.Product
         The input product containing unwrapped interferometric phase, typically 
@@ -588,7 +625,7 @@ def terrain_correction(product, DEM):
     viewing geometry. This step geocodes the image into a map coordinate system 
     and ensures that pixel locations align with their true geographic position.
 
-    Parameters
+    Args
     ----------
     product : snappy.Product
         The SAR product to which terrain correction will be applied.
@@ -621,7 +658,7 @@ def save_product(product, filename, output_dir="_results", fmt="BEAM-DIMAP"):
     """
     Save a SNAP product to disk.
 
-    Parameters
+    Args
     ----------
     product : snappy.Product
         The SNAP product to save.
@@ -655,7 +692,7 @@ def plot(
     ax=None,
 ):
     """
-    Visualize a multilooked interferogram as SNAP-like rainbow (HSV).
+    Visualize an interferogram as SNAP-like rainbow (HSV). This can be used to plot any interferogram outputs
 
     Args:
       dim_path   : path to the .dim file (next to the .data/ folder)
