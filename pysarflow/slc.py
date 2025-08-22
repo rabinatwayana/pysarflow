@@ -41,7 +41,7 @@ Integer = jpy.get_type('java.lang.Integer')
 
 def read_slc_product(product_path):
     """
-    Reads a Sentinel-1 GRD product using SNAP's ProductIO.
+    Reads a Sentinel-1 SLC product using SNAP's ProductIO.
 
     This function checks whether the provided product path exists on disk, then
     attempts to load the product using ProductIO.readProduct. If the product
@@ -64,7 +64,7 @@ def read_slc_product(product_path):
         return product
     except Exception as e:
         raise RuntimeError(
-            f"An error occurred while reading the grd product: {str(e)}"
+            f"An error occurred while reading the slc product: {str(e)}"
         ) from e
 
 def burst_for_geometry(product, safe_dir, geom, subswath=None):
@@ -281,7 +281,7 @@ def back_geocoding(products, dem_name="SRTM 1Sec HGT", ext_dem=None):
     print("Back geocoding applied!")
     return output
 
-def run_esd(product, preset="default", **overrides):
+def enhanced_spectral_diversity(product, preset="default", **overrides):
     """
     Enhanced Spectral Diversity (ESD) with sensible defaults + optional overrides.
     - product: Back-Geocoding output (master + slave(s))
@@ -436,35 +436,6 @@ def interferogram(product):
     output = GPF.createProduct("Interferogram", parameters, product) 
     print("Interferogram created!")
     return output
-
-def topsar_deburst(product, polarization):  
-    """
-    Apply TOPSAR deburst operation to a Sentinel-1 product.
-
-    This function removes burst discontinuities in TOPSAR acquisitions 
-    by merging bursts into a seamless image for the specified polarization. 
-    It is a necessary preprocessing step for Sentinel-1 TOPSAR IW and EW 
-    data before further interferometric or geocoding analysis.
-
-    Parameters
-    ----------
-    product : snappy.Product
-        The input Sentinel-1 product to which the deburst operation will be applied.
-    polarization : str
-        The polarization channel to process (e.g., 'VV', 'VH', 'HH', 'HV').
-
-    Returns
-    -------
-    snappy.Product
-        The deburst-processed Sentinel-1 product.
-    """
-    parameters = HashMap()
-    print('Apply TOPSAR Deburst...')
-    parameters.put("Polarisations", polarization)
-    output = GPF.createProduct("TOPSAR-Deburst", parameters, product)
-    print("TOPSAR Deburst applied!")
-    return output
-  
   
 def topsar_deburst(product, polarization):  
     """
@@ -494,7 +465,7 @@ def topsar_deburst(product, polarization):
     print("TOPSAR Deburst applied!")
     return output  
 
-def multilook(product, n_rg=3, n_az=1, source_bands=None, output_intensity=False):
+def multilooking(product, n_rg=3, n_az=1, source_bands=None, output_intensity=False):
     """
     SNAP 'Multilook' operator.
 

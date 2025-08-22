@@ -10,6 +10,9 @@ An open-source python library for SAR data processing
 
 Despite the growing usage of SAR data, the processing workflow remains complex and still relies on specialized heavy desktop tools creating huge barriers for students and non-experts. There is a growing need for a modular, open-source and user-friendly workflow that can take Level-1 SAR products and guide users through essential steps ideally ending in products that are usable and compatible with geospatial pipelines.
 
+The project uses the esa-snappy library, a wrapper around the SNAP Java engine, which is the same core engine used by the SNAP Desktop application. Pysarflow package provides functionality similar to what is available in SNAP Desktop, but offers a Python-based interface to access and use them.
+
+
 ## Project Structure
 
 ```graphql
@@ -23,7 +26,7 @@ pysarflow/
 
 ## Installation
 
-To use this package, the esa-snappy library (the Python interface for ESA SNAP) is required before installation of the pysarflow package.  
+To use this package, the esa-snappy library (the Python wrapper for ESA SNAP) is required before installation of the pysarflow package.  
 The follwoing are the steps to install exsa-snappy :
 
 **1. Create and activate a conda environment**   
@@ -78,7 +81,7 @@ Contributions are welcome! Follow [dev setup guide](./docs/dev.md) & Please feel
 
 ## Acknowledgments
 
-- This library is build as a part of python software development course at Paris Lodron University Salzburg
+- This library is built as a part of python software development course at Paris Lodron University Salzburg
 - Built on top of powerful open-source libraries like numpy, rasterio
 
 ## Contributors
