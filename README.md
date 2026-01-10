@@ -2,10 +2,6 @@
 
 An open-source python library for SAR data processing
 
-> [!WARNING]
-> This library is under active development and lot of its functionality is still yet to code.
-
-
 ## Description
 
 Despite the growing usage of SAR data, the processing workflow remains complex and still relies on specialized heavy desktop tools creating huge barriers for students and non-experts. There is a growing need for a modular, open-source and user-friendly workflow that can take Level-1 SAR products and guide users through essential steps ideally ending in products that are usable and compatible with geospatial pipelines.
@@ -87,3 +83,8 @@ Contributions are welcome! Follow [dev setup guide](./docs/dev.md) & Please feel
 ## Contributors
 
 [![Contributors](https://contrib.rocks/image?repo=rabinatwayana/pysarflow)](https://github.com/rabinatwayana/pysarflow/graphs/contributors)
+
+## License
+
+This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
+
