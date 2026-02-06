@@ -7,3 +7,6 @@ site/
 ethel_temp/
 .DS_Store
 docs/data/
+sarsen/
+dump/
+dist/
