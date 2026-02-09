@@ -390,36 +390,78 @@ def apply_correction(type, ds, lut_ds):
     Returns:
         xarray.Dataset: A dataset containing corrected backscatter values for available polarizations
     """
-    corrected_dict={}
-    for pol in list(ds.keys()):
-        da= ds[pol]
-        lut=lut_ds[pol]
+    corrected_dict = {}
+    for pol in ds.data_vars:
+        da = ds[pol]
+        if pol not in lut_ds:
+            corrected_dict[pol] = da
+            continue
+        lut = lut_ds[pol]
 
-        # Creating full image grid
-        image_lines = np.arange(da.shape[0])   
-        image_pixels = np.arange(da.shape[1])  
-
-        # Interpolate the LUT on these coordinates (numeric interpolation):
-        lut_interp = lut.interp(
-            line=image_lines,
-            pixel=image_pixels,
-            method='linear',
-            kwargs={"fill_value": "extrapolate"}  # to extrapolate near edges if needed
+        # Align LUT to dataset
+        lut_aligned = lut.reindex(
+            line=da.line,
+            pixel=da.pixel,
+            method="nearest",
+            fill_value=0
         )
 
-        if da.dims != lut_interp.dims:
-            da = da.rename({'y': 'line', 'x': 'pixel'}) 
+        if type == "thermal_noise_removal":
+            corrected_dict[pol] = xr.where(da**2 - lut_aligned > 0, da**2 - lut_aligned, 0)
+        elif type == "radiometric_calibration":
+            corrected_dict[pol] = da / (lut_aligned**2)
 
-        # Apply correction using respective formula
-        if type=="thermal_noise_removal":
-            # source: https://sentinels.copernicus.eu/documents/247904/2142675/Thermal-Denoising-of-Products-Generated-by-Sentinel-1-IPF.pdf#page=18.10
-            corrected_dict[pol] = xr.where(da**2 - lut_interp > 0, da**2 - lut_interp, 0)
-        elif type=="radiometric_calibration":
-            #SOURCE: https://sentinels.copernicus.eu/documents/247904/685163/S1-Radiometric-Calibration-V1.0.pdf
-            corrected_dict[pol] = da / (lut_interp**2) # Since da is thermally corrected, no need of da**2
+    return xr.Dataset(corrected_dict)
+
+
+# def apply_correction(type, ds, lut_ds):
+#     """
+#     This is the common function to apply thermal noise removal and raduometric correction
+
+#     Arguments:
+#         type (str): Type of correction
+#         Options are:
+#             - 'thermal_noise_removal'
+#             - 'radiometric_calibration'
+#         representation_type (str, optional): Type of backscatter representation to be used. 
+#         Options are:
+#             - 'sigmaNought' (default)
+#             - 'betaNought'
+#             - 'gamma'
+    
+#     Returns:
+#         xarray.Dataset: A dataset containing corrected backscatter values for available polarizations
+#     """
+#     corrected_dict={}
+#     for pol in list(ds.keys()):
+#         da= ds[pol]
+#         lut=lut_ds[pol]
+
+#         # Creating full image grid
+#         image_lines = np.arange(da.shape[0])   
+#         image_pixels = np.arange(da.shape[1])  
+
+#         # Interpolate the LUT on these coordinates (numeric interpolation):
+#         lut_interp = lut.interp(
+#             line=image_lines,
+#             pixel=image_pixels,
+#             method='linear',
+#             kwargs={"fill_value": "extrapolate"}  # to extrapolate near edges if needed
+#         )
+
+#         if da.dims != lut_interp.dims:
+#             da = da.rename({'y': 'line', 'x': 'pixel'}) 
+
+#         # Apply correction using respective formula
+#         if type=="thermal_noise_removal":
+#             # source: https://sentinels.copernicus.eu/documents/247904/2142675/Thermal-Denoising-of-Products-Generated-by-Sentinel-1-IPF.pdf#page=18.10
+#             corrected_dict[pol] = xr.where(da**2 - lut_interp > 0, da**2 - lut_interp, 0)
+#         elif type=="radiometric_calibration":
+#             #SOURCE: https://sentinels.copernicus.eu/documents/247904/685163/S1-Radiometric-Calibration-V1.0.pdf
+#             corrected_dict[pol] = da / (lut_interp**2) # Since da is thermally corrected, no need of da**2
         
-    calibrated_ds= xr.Dataset(corrected_dict)
-    return calibrated_ds
+#     calibrated_ds= xr.Dataset(corrected_dict)
+#     return calibrated_ds
 
 def download_orbit_file(safe_folder, save_dir):
     """

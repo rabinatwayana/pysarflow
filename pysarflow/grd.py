@@ -264,10 +264,31 @@ class Sentinel1GRDProcessor:
         Returns:
             xarray.Dataset: A dataset with thermal noise removed from each polarization band.
         """
-        thermal_lut_ds=parse_thermal_noise_removal_lut(safe_folder)
-        result=apply_correction("thermal_noise_removal",ds, thermal_lut_ds)
+        # thermal_lut_ds=parse_thermal_noise_removal_lut(safe_folder)
+        # print(thermal_lut_ds, thermal_lut_ds)
+        # result=apply_correction("thermal_noise_removal",ds, thermal_lut_ds)
+        # print("Thermal noise removed successfully")
+        # return result
+    
+        # def remove_thermal_noise(safe_folder, ds):
+        # """
+        # Remove thermal noise from Sentinel-1 bands (VV/VH/etc.).
+        # Ensures line/pixel coordinates exist.
+        # """
+        # # Make sure dataset has coordinates
+        
+        for pol in ds.data_vars:
+            da = ds[pol]
+            if 'line' not in da.coords or 'pixel' not in da.coords:
+                lines = np.arange(da.shape[0])
+                pixels = np.arange(da.shape[1])
+                ds[pol] = xr.DataArray(da.values, dims=("line", "pixel"),
+                                    coords={"line": lines, "pixel": pixels})
+
+        thermal_lut_ds = parse_thermal_noise_removal_lut(safe_folder)
+        corrected_ds = apply_correction("thermal_noise_removal", ds, thermal_lut_ds)
         print("Thermal noise removed successfully")
-        return result
+        return corrected_ds
 
 
     def radiometric_calibration(self,safe_folder, ds, representation_type="sigmaNought"):
