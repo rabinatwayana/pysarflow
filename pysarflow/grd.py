@@ -296,7 +296,7 @@ class Sentinel1GRDProcessor:
         return corrected_ds
 
     # ----------- DATA CORRECTIONS : BORDER NOISE REMOVAL --------------
-    def remove_border_noise(safe_folder, ds, blocksize=2000, threshold=0.5):
+    def remove_border_noise(self, safe_folder, ds, blocksize=2000, threshold=0.5):
         """
         Remove Sentinel-1 GRD border noise from an xarray.Dataset.
 
@@ -352,7 +352,7 @@ class Sentinel1GRDProcessor:
         return xr.Dataset(corrected, coords=ds.coords)
 
     # ----------- RADIOMETRIC CALIBRATION --------------
-    def radiometric_calibration(self,safe_folder, ds, representation_type="sigmaNought"):
+    def radiometric_calibration(self, safe_folder, ds, representation_type="sigmaNought"):
         """
         Perform radiometric calibration of Sentinel-1 SAR GRD data using a provided lookup table (LUT).
 
@@ -376,7 +376,7 @@ class Sentinel1GRDProcessor:
         return result
     
     # ----------- SPECKLE FILTERING --------------
-    def speckle_filter(ds, method = 'lee', size=7):
+    def speckle_filter(self, ds, method = 'lee', size=7):
         """
         Apply speckle filtering to all bands in xarray.Dataset.
         Currently supports only Lee filter as filtering method
@@ -420,7 +420,7 @@ class Sentinel1GRDProcessor:
         return ds.assign(**filtered_vars)
     
     # ----------- CONVERSION TO DECIBEL (dB) --------------
-    def convert_to_db(ds, bands=['VV', 'VH'], floor=1e-10):
+    def convert_to_db(self, ds, bands=['VV', 'VH'], floor=1e-10):
         """
         Convert specified bands in an xarray.Dataset to decibel (dB) scale.
         Adds new variables with '_db' suffix to the dataset.
