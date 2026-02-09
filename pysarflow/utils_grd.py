@@ -27,9 +27,11 @@ import re
 from pathlib import Path
 from datetime import datetime
 from scipy.interpolate import interp1d
+from scipy.ndimage import uniform_filter
 from eof.download import download_eofs # from sentineleof package
 
 
+# ----------- s3 URL CONVERSION --------------
 def s3_to_https(s3_url):
     '''
     Convert an S3 URL (s3://bucket/key) to its equivalent HTTPS URL for web access
@@ -42,6 +44,7 @@ def s3_to_https(s3_url):
     return f"https://{bucket}.s3.amazonaws.com/{key}"
 
 
+#  ----------- STAC ITEMS TO GEODATAFRAME --------------
 def items_to_geodataframe(items):
     ''' 
         Convert a list of STAC Items into a GeoDataFrame
@@ -60,6 +63,7 @@ def items_to_geodataframe(items):
         _items.append(_i)
     return gpd.GeoDataFrame(_items, geometry="geometry")
 
+# ----------- BOUNDING BOX PLOTTING --------------
 def plot_bbox(data, *args, **kwargs):
     '''
     plot aoi on a map with background tiles
@@ -77,7 +81,8 @@ def plot_bbox(data, *args, **kwargs):
         line_width=4,
         **kwargs,
     )
-        
+
+# ----------- THUMBNAIL PLOTTING --------------        
 def plot_thumbnails(df_assets, df_properties, n_cols=4):
     '''
         Plot image thumbnails from assets DataFrame in a grid layout with titles.
@@ -137,6 +142,8 @@ def plot_thumbnails(df_assets, df_properties, n_cols=4):
     except Exception as e:
         print("Unexpected error occurred in plot_thumbnails:", str(e))
 
+
+# ----------- LUT PARSING FOR THERMAL NOISE REMOVAL AND RADIOMETRIC CALIBRATION --------------
 def parse_thermal_noise_removal_lut(safe_folder_path):
     """
     Parsing Lookup Table (LUT) for thermal noise removal raeding the noise xml file.
@@ -203,6 +210,7 @@ def parse_thermal_noise_removal_lut(safe_folder_path):
     print("Thermal noise removal LUT created successfully")
     return lut_ds
 
+# ----------- RADIOMETRIC CALIBRATION --------------
 def parse_radiometric_calibration_lut(safe_folder_path, representation_type="sigmaNought"):
     """
     Parsing LUT for radiometric calibration bt reading the calibration xml files.
@@ -284,7 +292,6 @@ def parse_radiometric_calibration_lut(safe_folder_path, representation_type="sig
     lut_ds = xr.Dataset(lut_dict)
     print("Radiometric calibration LUT created successfully")
     return lut_ds
-
 
 
 def parse_beta_lut(safe_folder_path, representation_type="betaNought"):
@@ -372,6 +379,8 @@ def parse_beta_lut(safe_folder_path, representation_type="betaNought"):
     print("Radiometric calibration LUT created successfully")
     return lut_ds
 
+
+# -----------APPLY THERMAL NOISE REMOVAL AND RADIOMETRIC CALIBRATION --------------
 def apply_correction(type, ds, lut_ds):
     """
     This is the common function to apply thermal noise removal and raduometric correction
@@ -414,55 +423,7 @@ def apply_correction(type, ds, lut_ds):
     return xr.Dataset(corrected_dict)
 
 
-# def apply_correction(type, ds, lut_ds):
-#     """
-#     This is the common function to apply thermal noise removal and raduometric correction
-
-#     Arguments:
-#         type (str): Type of correction
-#         Options are:
-#             - 'thermal_noise_removal'
-#             - 'radiometric_calibration'
-#         representation_type (str, optional): Type of backscatter representation to be used. 
-#         Options are:
-#             - 'sigmaNought' (default)
-#             - 'betaNought'
-#             - 'gamma'
-    
-#     Returns:
-#         xarray.Dataset: A dataset containing corrected backscatter values for available polarizations
-#     """
-#     corrected_dict={}
-#     for pol in list(ds.keys()):
-#         da= ds[pol]
-#         lut=lut_ds[pol]
-
-#         # Creating full image grid
-#         image_lines = np.arange(da.shape[0])   
-#         image_pixels = np.arange(da.shape[1])  
-
-#         # Interpolate the LUT on these coordinates (numeric interpolation):
-#         lut_interp = lut.interp(
-#             line=image_lines,
-#             pixel=image_pixels,
-#             method='linear',
-#             kwargs={"fill_value": "extrapolate"}  # to extrapolate near edges if needed
-#         )
-
-#         if da.dims != lut_interp.dims:
-#             da = da.rename({'y': 'line', 'x': 'pixel'}) 
-
-#         # Apply correction using respective formula
-#         if type=="thermal_noise_removal":
-#             # source: https://sentinels.copernicus.eu/documents/247904/2142675/Thermal-Denoising-of-Products-Generated-by-Sentinel-1-IPF.pdf#page=18.10
-#             corrected_dict[pol] = xr.where(da**2 - lut_interp > 0, da**2 - lut_interp, 0)
-#         elif type=="radiometric_calibration":
-#             #SOURCE: https://sentinels.copernicus.eu/documents/247904/685163/S1-Radiometric-Calibration-V1.0.pdf
-#             corrected_dict[pol] = da / (lut_interp**2) # Since da is thermally corrected, no need of da**2
-        
-#     calibrated_ds= xr.Dataset(corrected_dict)
-#     return calibrated_ds
-
+# ---------- ORBIT FILE HANDLING --------------
 def download_orbit_file(safe_folder, save_dir):
     """
     Extract date and mission from Sentinel-1 SAFE or zip filename,
@@ -486,7 +447,6 @@ def download_orbit_file(safe_folder, save_dir):
     # Download orbit file
     orbit_files = download_eofs([date_formatted], [mission], save_dir=save_dir)
     return orbit_files
-
 
 
 def update_annotations_orbit(safe_folder, eof_orbit_file, overwrite=True):
@@ -597,3 +557,176 @@ def add_precise_orbit_coords(ds, annotation_xml_path):
         sat_vel_z=("time", interp_vel[2]),
     )
     return ds
+
+
+
+# ----------- BORDER NOISE REMOVAL --------------
+def get_ipf_version(safe_folder):
+    """
+    Extract the Sentinel-1 IPF processor version from manifest.safe.
+
+    Parameters:
+        safe_folder(str or Path): Path to Sentinel-1 SAFE folder.
+
+    Returns:
+        IPF processor version, e.g., 2.91.
+    """
+    manifest = Path(safe_folder) / "manifest.safe"
+    with open(manifest, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    match = re.search(r'name="Sentinel-1 IPF"\s+version="([\d.]+)"', text)
+    if match:
+        version = float(match.group(1))
+        return version
+    raise RuntimeError("IPF version not found in manifest.safe")
+
+def get_acquisition_mode(safe_folder):
+    """
+    Extract the acquisition mode (e.g., IW or EW) from manifest.safe.
+
+    Parameters
+    safe_folder(str or Path) : Path to Sentinel-1 SAFE folder.
+
+    Returns
+        Acquisition mode (str).
+    """
+    manifest_path = Path(safe_folder) / "manifest.safe"
+    tree = ET.parse(manifest_path)
+    root = tree.getroot()
+
+    namespaces = {prefix: uri for event, (prefix, uri) in ET.iterparse(manifest_path, events=['start-ns'])}
+    ns_uri = namespaces.get('s1sarl1')
+    if ns_uri is None:
+        raise RuntimeError("Namespace prefix 's1sarl1' not found in manifest.safe")
+
+    instr_mode_tag = f'{{{ns_uri}}}instrumentMode'
+    mode_tag = f'{{{ns_uri}}}mode'
+
+    instr_mode_elem = root.find(f'.//{instr_mode_tag}')
+    if instr_mode_elem is not None:
+        mode_elem = instr_mode_elem.find(mode_tag)
+        if mode_elem is not None:
+            return mode_elem.text.strip()
+    raise RuntimeError("Acquisition mode not found in manifest.safe")
+
+def get_calibration_constant(safe_folder):
+    """
+    Extract the calibration constant (ADN) from calibration XML.
+
+    Parameters
+    safe_folder(str or Path) : Path to Sentinel-1 SAFE folder.
+
+    Returns
+        Calibration constant (float).
+    """
+    calib_files = list(Path(safe_folder).glob('annotation/calibration/*calibration-s1*-grd-*.xml'))
+    if not calib_files:
+        raise RuntimeError("Calibration XML files not found in SAFE folder")
+    tree = ET.parse(calib_files[0])
+    root = tree.getroot()
+    dn_elem = root.find('.//calibrationVector/dn')
+    if dn_elem is None or not dn_elem.text:
+        raise RuntimeError("Calibration constant (dn) not found in calibration XML")
+    adn = float(dn_elem.text.strip().split()[0])
+    return adn
+
+def compute_scaling_factor(safe_folder):
+    """
+    Compute noise scaling factor based on IPF version and acquisition mode.
+
+    Parameters
+    safe_folder (str or Path) : Path to Sentinel-1 SAFE folder.
+
+    Returns
+        scaling_factor (tuple): float, ipf_version: float 
+    """
+    ipf_version = get_ipf_version(safe_folder)
+    acq_mode = get_acquisition_mode(safe_folder)
+    adn = get_calibration_constant(safe_folder)
+
+    knoise = {'IW': 75088.7, 'EW': 56065.87}
+    if acq_mode not in knoise:
+        raise RuntimeError(f"Unsupported acquisition mode: {acq_mode}")
+
+    if ipf_version < 2.34:
+        scaling_factor = knoise[acq_mode] * adn
+    else:
+        scaling_factor = knoise[acq_mode] * adn * adn
+
+    return scaling_factor, ipf_version
+
+def parse_noise_vectors(safe_folder):
+    """
+    Parse noise vectors from noise annotation XML files.
+
+    Parameters
+    safe_folder(str or Path):Path to Sentinel-1 SAFE folder.
+
+    Returns
+    list of tuples: (line_number, pixel_positions, noise_values)
+    """
+    noise_files = list(Path(safe_folder).glob('annotation/calibration/*noise*.xml'))
+    if not noise_files:
+        raise RuntimeError("No noise annotation XML files found in SAFE folder")
+
+    noise_vectors = []
+    for nf in noise_files:
+        tree = ET.parse(nf)
+        root = tree.getroot()
+        for nv in root.findall('.//noiseVector'):
+            line = int(nv.find('line').text)
+            pixels = [int(x) for x in nv.find('pixel').text.strip().split()]
+            noise_vals = [float(x) for x in nv.find('noiseLut').text.strip().split()]
+            noise_vectors.append((line, pixels, noise_vals))
+    return noise_vectors
+
+def build_noise_map(noise_vectors, shape, blocksize):
+    """
+    Build a noise map array for image borders by interpolating noise vectors.
+
+    Parameters
+        noise_vectors (list):Output from parse_noise_vectors.
+        shape (tuple): (lines, samples) shape of the dataset.
+        blocksize (int): Size of border in pixels.
+
+    Returns
+        Noise map of same shape as image.(np.ndarray)
+    """
+    lines, samples = shape
+    noise_map = np.zeros((lines, samples), dtype=float)
+
+    vector_lines = np.array([nv[0] for nv in noise_vectors])
+
+    for line, pixels, noises in noise_vectors:
+        if line < blocksize or line >= lines - blocksize:
+            interp = np.interp(np.arange(samples), pixels, noises)
+            noise_map[line, :] = interp
+    return noise_map
+
+
+
+# ----------- FILTERING --------------
+def lee_filter(img, size):
+    """
+    Apply Lee filter with specified window size.
+    Adapted from https://stackoverflow.com/questions/39785970/speckle-lee-filter-in-python
+
+    Parameters
+        img(np.ndarray) :mInput image (2D array).
+        size (int): Window size (e.g., 5, 7).
+
+    Returns
+        np.ndarray: Speckle-filtered image.
+    """
+    img_mean = uniform_filter(img, size)
+    img_sqr_mean = uniform_filter(img ** 2, size)
+    img_variance = img_sqr_mean - img_mean ** 2
+
+    # Estimate overall variance from image
+    overall_variance = np.mean(img_variance)
+
+    img_weights = img_variance / (img_variance + overall_variance)
+    img_output = img_mean + img_weights * (img - img_mean)
+
+    return img_output

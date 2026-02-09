@@ -18,16 +18,17 @@ import rioxarray
 import odc.stac
 import hvplot.pandas
 
-from .utils_grd import items_to_geodataframe, apply_correction, parse_radiometric_calibration_lut,parse_thermal_noise_removal_lut
+from .utils_grd import items_to_geodataframe, apply_correction, parse_radiometric_calibration_lut,parse_thermal_noise_removal_lut, get_ipf_version, get_acquisition_mode, get_calibration_constant, compute_scaling_factor, parse_noise_vectors, build_noise_map, lee_filter,download_orbit_file, update_annotations_orbit, add_precise_orbit_coords
 
 import os
 import xarray as xr
 import zipfile
 import xml.etree.ElementTree as ET
+from scipy.ndimage import uniform_filter
 
 from pathlib import Path
-from .utils_grd import download_orbit_file, update_annotations_orbit, add_precise_orbit_coords
 
+# ----------- SENTINEL-1 GRD PROCESSOR --------------
 class Sentinel1GRDProcessor:
     """
     A processor class to search and explore Sentinel-1 GRD data from the Earth Search STAC API.
@@ -58,7 +59,7 @@ class Sentinel1GRDProcessor:
     search_data(aoi: dict, datetime: str):
         Searches Sentinel-1 GRD data within a given Area of Interest (AOI) and datetime range
     """
-
+  
     def __init__(self, api_url="https://earth-search.aws.element84.com/v1"):
         """
         Initializes the Sentinel1GRDProcessor with a connection to the specified STAC API.
@@ -79,7 +80,8 @@ class Sentinel1GRDProcessor:
         self.gdf_metadata = None
         self.df_properties = None
         self.df_assets = None
-
+    
+    # ----------- DATA SEARCH --------------
     def search_data(self, aoi: dict, datetime: str,):
 
         """
@@ -121,6 +123,7 @@ class Sentinel1GRDProcessor:
         self.df_assets = pd.DataFrame(item_assets)
 
    
+   # ----------- DATA LOADING --------------
     def read_grd_data(self, safe_path, extract_to=None):
         """
         Loads Sentinel-1 GRD SAR data from a SAFE folder or ZIP file into an xarray dataset,
@@ -223,6 +226,7 @@ class Sentinel1GRDProcessor:
         print("Data loaded successfully")
         return ds
 
+    # ----------- APPLY ORBIT FILE --------------
     def apply_orbit_file(self, ds, safe_folder_path, save_dir, overwrite=True):
         """
         Apply precise orbit file to a Sentinel-1 dataset.
@@ -245,6 +249,7 @@ class Sentinel1GRDProcessor:
         return add_precise_orbit_coords(ds, first_annotation)
 
     
+    # ----------- DATA CORRECTIONS : THERMAL NOISE REMOVAL --------------
     def remove_thermal_noise(self, safe_folder,ds):
 
         """
@@ -290,7 +295,63 @@ class Sentinel1GRDProcessor:
         print("Thermal noise removed successfully")
         return corrected_ds
 
+    # ----------- DATA CORRECTIONS : BORDER NOISE REMOVAL --------------
+    def remove_border_noise(safe_folder, ds, blocksize=2000, threshold=0.5):
+        """
+        Remove Sentinel-1 GRD border noise from an xarray.Dataset.
 
+        Parameters
+            safe_folder (str or Path): Path to Sentinel-1 SAFE folder.
+            ds(xarray.Dataset): GRD dataset with dimensions (line, pixel) or (y, x).
+            blocksize (int, optional): Border size in pixels (default: 2000).
+            threshold (float, optional): Threshold to keep pixels after noise subtraction (default: 0.5).
+
+        Returns
+            xarray.Dataset: Noise-corrected dataset.
+        """
+        scaling_factor, ipf_version = compute_scaling_factor(safe_folder)
+
+        if ipf_version >= 2.9:
+            print(f"[INFO] IPF version {ipf_version} ≥ 2.9 → border noise removal is usually not necessary.")
+            return ds
+        else:
+            print(f"[INFO] IPF version {ipf_version} < 2.9 → removing border noise...")
+
+        noise_vectors = parse_noise_vectors(safe_folder)
+
+        # Determine shape
+        lines = ds.dims.get('line', ds.dims.get('y'))
+        samples = ds.dims.get('pixel', ds.dims.get('x'))
+        shape = (lines, samples)
+
+        # Build noise map
+        noise_map = build_noise_map(noise_vectors, shape, blocksize)
+
+        corrected = {}
+        for band in ds.data_vars:
+            arr = ds[band].values.astype(float)
+            mask = np.ones_like(arr, dtype=bool)
+
+            # Top and bottom borders
+            for slc in [slice(0, blocksize), slice(lines - blocksize, lines)]:
+                arr_part = arr[slc, :]
+                noise_part = noise_map[slc, :]
+                denoised = arr_part**2 - noise_part * scaling_factor
+                mask[slc, :] &= denoised > threshold
+
+            # Left and right borders
+            for slc in [slice(0, blocksize), slice(samples - blocksize, samples)]:
+                arr_part = arr[:, slc]
+                noise_part = noise_map[:, slc]
+                denoised = arr_part**2 - noise_part * scaling_factor
+                mask[:, slc] &= denoised > threshold
+
+            arr_masked = np.where(mask, arr, 0)
+            corrected[band] = (ds[band].dims, arr_masked)
+
+        return xr.Dataset(corrected, coords=ds.coords)
+
+    # ----------- RADIOMETRIC CALIBRATION --------------
     def radiometric_calibration(self,safe_folder, ds, representation_type="sigmaNought"):
         """
         Perform radiometric calibration of Sentinel-1 SAR GRD data using a provided lookup table (LUT).
@@ -313,5 +374,72 @@ class Sentinel1GRDProcessor:
         result= apply_correction("radiometric_calibration", ds, sigma_nought_lut)
         print("Radiometric calibration completed successfully")
         return result
+    
+    # ----------- SPECKLE FILTERING --------------
+    def speckle_filter(ds, method = 'lee', size=7):
+        """
+        Apply speckle filtering to all bands in xarray.Dataset.
+        Currently supports only Lee filter as filtering method
 
-        
+        Parameters
+            ds (xarray.Dataset): Input dataset with dimensions ('line','pixel') or ('y','x').
+            method (str, optional): Filtering method ('lee' supported, default).
+            size (int, optional): Window size (default: 7).
+
+        Returns
+            xarray.Dataset : Dataset with new variables '{band}_filtered'.
+        """
+        if method != 'lee':
+            raise NotImplementedError(f"Speckle filter method '{method}' not implemented.")
+
+        filtered_vars = {}
+        for band in ds.data_vars:
+            arr = ds[band]
+
+            # Create valid data mask (avoid propagating NaNs)
+            valid_mask = np.isfinite(arr)
+            arr_filled = arr.fillna(0)
+
+            # Apply Lee filter using xarray.apply_ufunc
+            filtered = xr.apply_ufunc(
+                lee_filter,
+                arr_filled,
+                kwargs={'size': size},
+                input_core_dims=[['line', 'pixel']],   # adjust if dimensions are ('y','x')
+                output_core_dims=[['line', 'pixel']],
+                vectorize=True,
+                dask='parallelized',
+                output_dtypes=[arr.dtype]
+            )
+
+            # Restore original NaNs
+            filtered = filtered.where(valid_mask)
+
+            filtered_vars[f"{band}_filtered"] = filtered
+
+        return ds.assign(**filtered_vars)
+    
+    # ----------- CONVERSION TO DECIBEL (dB) --------------
+    def convert_to_db(ds, bands=['VV', 'VH'], floor=1e-10):
+        """
+        Convert specified bands in an xarray.Dataset to decibel (dB) scale.
+        Adds new variables with '_db' suffix to the dataset.
+
+        Parameters
+            ds (xarray.Dataset): Input dataset containing power or intensity bands.
+            bands (list of str, optional): Names of bands to convert. Defaults to ['VV', 'VH'].
+            floor (float, optional): Minimum value to avoid log(0). Default is 1e-10.
+
+        Returns
+            xarray.Dataset :Dataset with additional bands in dB (e.g., 'VV_db', 'VH_db').
+        """
+        new_vars = {}
+        for band in bands:
+            if band in ds:
+                db = 10 * np.log10(np.maximum(ds[band], floor))
+                new_vars[f"{band}_db"] = db
+            else:
+                print(f"Warning: band '{band}' not found in dataset; skipping.")
+        return ds.assign(**new_vars)
+
+
