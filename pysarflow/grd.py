@@ -9,12 +9,17 @@ from io import BytesIO
 import numpy as np
 import math
 
+import rasterio
+from rasterio.transform import rowcol
+from rasterio.warp import transform_bounds
+
 import geopandas as gpd
 import pandas as pd
 import matplotlib.pyplot as plt
 from shapely.geometry import shape
 
-import rioxarray 
+import rioxarray
+import xarray as xr 
 import odc.stac
 import hvplot.pandas
 
@@ -175,6 +180,9 @@ class Sentinel1GRDProcessor:
 
         data_vars = {}
 
+        # NEW
+        vv_tiff_path = None  # Track the VV band file path for later use in subsetting
+
         for tiff in tiff_files:
             pols = ["vv", "vh", "hh", "hv"]
             band_name = None
@@ -192,8 +200,24 @@ class Sentinel1GRDProcessor:
                 da = da.squeeze("band", drop=True)
             data_vars[band_name] = da
 
+            # NEW
+            if band_name == "VV":
+                vv_tiff_path = tiff_path
+
         ds = xr.Dataset(data_vars)
 
+        # NEW!
+        # Store the VV TIFF path in attributes (used by subset function)
+        if vv_tiff_path:
+            ds.attrs["vv_tiff_path"] = str(vv_tiff_path)
+
+        # NEW!
+        if vv_tiff_path:
+            with rasterio.open(vv_tiff_path) as src:
+                if src.gcps and len(src.gcps[0]) > 0:
+                    ds.attrs["gcps"] = src.gcps[0]           # list of GCPs
+                    ds.attrs["gcps_crs"] = src.gcps[1] or "EPSG:4326"
+                    
         # Find an annotation XML corresponding to the band (e.g., VV)
         # Use the first annotation file that matches the polarization of the bands loaded.
         pol_files = [f for f in os.listdir(annotation_path) if f.lower().endswith(".xml")]
@@ -225,6 +249,126 @@ class Sentinel1GRDProcessor:
         ds.attrs["startTime"] = start_time.isoformat()
         print("Data loaded successfully")
         return ds
+
+
+    # ----------- SUBSET TO AOI --------------
+    def subset_aoi(self, ds, bbox: list[float]):
+        """
+        Subset Sentinel-1 GRD xarray Dataset to  AOI using lon/lat bbox.
+        
+        Features:
+        - Uses GCPs from original TIFF to map bbox corners → pixel range
+        - Subsets ALL bands (VV, VH, etc.) using the same pixel window
+        - Adds rough geographic coordinates (linear interpolation)
+        - Works around common Sentinel-1 GRD affine/GCP issues
+        
+        Args:
+            ds: xarray.Dataset from read_grd_data (needs 'vv_tiff_path' in attrs)
+            bbox: [min_lon, min_lat, max_lon, max_lat] in EPSG:4326
+        
+        Returns:
+            xr.Dataset: subsetted version with approximate coords
+        """
+        # --- check bbox validity ---
+        if len(bbox) != 4:
+            raise ValueError("bbox must be [min_lon, min_lat, max_lon, max_lat]")
+        
+        min_lon, min_lat, max_lon, max_lat = bbox
+        
+        # enforce expected EPSG since GCPs are usually in EPSG:4326 
+        if not (-180 <= min_lon <= 180 and -90 <= min_lat <= 90 and
+                -180 <= max_lon <= 180 and -90 <= max_lat <= 90):
+            raise ValueError(
+                "bbox coordinates are expected in EPSG:4326 (lon/lat). "
+                f"Got {bbox}"
+            )
+
+        print(f"Subsetting to AOI (EPSG:4326): [{min_lon:.4f}, {min_lat:.4f}, {max_lon:.4f}, {max_lat:.4f}]")
+        
+        # Get TIFF path from attributes
+        tiff_path = ds.attrs.get("vv_tiff_path")
+        if not tiff_path:
+            raise ValueError(
+                "No 'vv_tiff_path' found in ds.attrs.\n"
+                f"Available keys: {list(ds.attrs.keys())}\n"
+                "Make sure read_grd_data stores it as ds.attrs['vv_tiff_path']"
+            )
+        print(f"Using TIFF for geolocation: {tiff_path}")
+
+        # Open TIFF and get GCPs
+        with rasterio.open(tiff_path) as src:
+            if not src.gcps or len(src.gcps[0]) == 0:
+                raise ValueError("No GCPs found in TIFF — cannot estimate subset location")
+
+            gcps, gcps_crs = src.gcps
+            gcps_crs = gcps_crs or "EPSG:4326"
+
+            # Show approximate scene extent from GCPs (for debugging)
+            lons = [gcp.x for gcp in gcps]
+            lats = [gcp.y for gcp in gcps]
+            print(f"Scene approx lon range (from GCPs): {min(lons):.4f} – {max(lons):.4f}")
+            print(f"Scene approx lat range (from GCPs): {min(lats):.4f} – {max(lats):.4f}")
+
+            left, bottom, right, top = min_lon, min_lat, max_lon, max_lat
+
+            # Create approximate affine from GCPs (used only for rowcol)
+            from rasterio.transform import from_gcps
+            approx_transform = from_gcps(gcps)
+
+            # Map bbox corners to pixel coordinates
+            corner_lons = [left, right, right, left]
+            corner_lats = [top, top, bottom, bottom]  # top = max lat, bottom = min lat
+
+            rows = []
+            cols = []
+
+            for lon, lat in zip(corner_lons, corner_lats):
+                try:
+                    row, col = rowcol(
+                        approx_transform,
+                        lon, lat,
+                        precision=0.1,  # tolerance for non-exact fit
+                        op=float
+                    )
+                    rows.append(row)
+                    cols.append(col)
+                except Exception as e:
+                    print(f"Corner ({lon:.4f}, {lat:.4f}) could not be mapped: {e}")
+        if not rows:
+            raise ValueError("None of the bbox corners could be mapped to pixels — likely no overlap")
+
+        # Take min/max row/col
+        row_start = max(0, int(min(rows)))
+        row_stop  = min(src.height, int(max(rows)) + 1)
+        col_start = max(0, int(min(cols)))
+        col_stop  = min(src.width, int(max(cols)) + 1)
+
+        height = row_stop - row_start
+        width  = col_stop - col_start
+
+        # Slice all bands using the computed window
+        subset_vars = {}
+        for band_name in ds.data_vars:
+            subset_da = ds[band_name].isel(
+                y=slice(row_start, row_stop),
+                x=slice(col_start, col_stop)
+            )
+
+            # Rough geographic coordinates (linear from bbox)
+            approx_x = np.linspace(left, right, subset_da.sizes["x"])
+            approx_y = np.linspace(top, bottom, subset_da.sizes["y"])[::-1]  # flip for north-up
+            subset_da = subset_da.assign_coords(x=approx_x, y=approx_y)
+            subset_da = subset_da.rio.write_crs("EPSG:4326")
+
+            subset_vars[band_name] = subset_da
+
+        subset_ds = xr.Dataset(subset_vars)
+        subset_ds.attrs = ds.attrs.copy()
+
+        print(f"subset shape (y, x): {subset_da.sizes['y']}, {subset_da.sizes['x']}")
+
+        return subset_ds
+
 
     # ----------- APPLY ORBIT FILE --------------
     def apply_orbit_file(self, ds, safe_folder_path, save_dir, overwrite=True):
