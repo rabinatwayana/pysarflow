@@ -28,6 +28,7 @@ from pathlib import Path
 from datetime import datetime
 from scipy.interpolate import interp1d
 from scipy.ndimage import uniform_filter
+from scipy.spatial import cKDTree
 from eof.download import download_eofs # from sentineleof package
 
 
@@ -142,6 +143,72 @@ def plot_thumbnails(df_assets, df_properties, n_cols=4):
     except Exception as e:
         print("Unexpected error occurred in plot_thumbnails:", str(e))
 
+
+# ----------------- SUBSETTING TO AOI --------------
+def parse_geolocation_grid(annotation_path: str):
+    """
+    Parse sparse geolocation grid from Sentinel-1 annotation XML.
+
+    Args:
+        annotation_path: Path to the annotation XML file
+
+    Returns:
+        dict containing:
+            - latitude: 2D numpy array of latitudes
+            - longitude: 2D numpy array of longitudes
+            - lines: 1D array of sparse line indices
+            - pixels: 1D array of sparse pixel indices
+    """
+    tree = ET.parse(annotation_path)
+    root = tree.getroot()
+    
+    points = []
+    for point in root.findall(".//geolocationGridPoint"):
+        points.append({
+            'line': float(point.find("line").text),
+            'pixel': float(point.find("pixel").text),
+            'latitude': float(point.find("latitude").text),
+            'longitude': float(point.find("longitude").text),
+            'height': float(point.find("height").text)
+        })
+    
+    lines = sorted(set(p['line'] for p in points))
+    pixels = sorted(set(p['pixel'] for p in points))
+    
+    lat_grid = np.zeros((len(lines), len(pixels)))
+    lon_grid = np.zeros((len(lines), len(pixels)))
+    
+    for p in points:
+        i = lines.index(p['line'])
+        j = pixels.index(p['pixel'])
+        lat_grid[i, j] = p['latitude']
+        lon_grid[i, j] = p['longitude']
+    
+    return {
+        'latitude': lat_grid,
+        'longitude': lon_grid,
+        'lines': np.array(lines),
+        'pixels': np.array(pixels)
+    }
+
+
+def build_geo_kdtree(lat_grid: np.ndarray, lon_grid: np.ndarray):
+    """
+    Build KDTree to invert lat/lon → sparse line/pixel indices.
+
+    Args:
+        lat_grid: 2D array of latitude values
+        lon_grid: 2D array of longitude values
+
+    Returns:
+        tree: cKDTree
+        n_lines: number of sparse lines
+        n_pixels: number of sparse pixels
+    """
+    n_lines, n_pixels = lat_grid.shape
+    points = np.column_stack([lat_grid.ravel(), lon_grid.ravel()])
+    tree = cKDTree(points)
+    return tree, n_lines, n_pixels
 
 # ----------- LUT PARSING FOR THERMAL NOISE REMOVAL AND RADIOMETRIC CALIBRATION --------------
 def parse_thermal_noise_removal_lut(safe_folder_path):
@@ -478,7 +545,7 @@ def update_annotations_orbit(safe_folder, eof_orbit_file, overwrite=True):
         precise_orbits.append({"time": time, "position": pos, "velocity": vel})
 
     annotation_folder = Path(safe_folder) / "annotation"
-    xml_files = list(annotation_folder.glob("*.xml"))
+    xml_files = [f for f in annotation_folder.glob("*.xml") if "_updated" not in f.stem]
     if not xml_files:
         raise FileNotFoundError(f"No XML files found in {annotation_folder}")
 
@@ -504,7 +571,13 @@ def update_annotations_orbit(safe_folder, eof_orbit_file, overwrite=True):
             for coord, label in zip(sv["velocity"], ["x", "y", "z"]):
                 ET.SubElement(vel_el, label).text = f"{coord:.6e}"
 
-        out_path = xml_file if overwrite else xml_file.with_name(xml_file.stem + "_updated.xml")
+        stem = xml_file.stem
+        if stem.endswith("_updated"):
+            stem = stem[:-8]
+
+        out_path = xml_file.with_name(stem + "_updated.xml")
+        if not overwrite and out_path.exists():
+            out_path = xml_file.with_name(stem + "_updated_2.xml")
         tree.write(out_path, encoding="utf-8", xml_declaration=True)
         print(f"Updated orbitList in {out_path}")
 

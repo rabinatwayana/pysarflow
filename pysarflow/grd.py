@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """It includes functions for handling Ground Range Detected (GRD) datasets."""
+from glob import glob
 from pystac_client import Client
 from pystac import ItemCollection
 
@@ -23,13 +24,15 @@ import xarray as xr
 import odc.stac
 import hvplot.pandas
 
-from .utils_grd import items_to_geodataframe, apply_correction, parse_radiometric_calibration_lut,parse_thermal_noise_removal_lut, get_ipf_version, get_acquisition_mode, get_calibration_constant, compute_scaling_factor, parse_noise_vectors, build_noise_map, lee_filter,download_orbit_file, update_annotations_orbit, add_precise_orbit_coords
+from .utils_grd import items_to_geodataframe, apply_correction, parse_radiometric_calibration_lut,parse_thermal_noise_removal_lut, get_ipf_version, get_acquisition_mode, get_calibration_constant, compute_scaling_factor, parse_noise_vectors, build_noise_map, lee_filter,download_orbit_file, update_annotations_orbit, add_precise_orbit_coords, build_geo_kdtree,parse_geolocation_grid
+
 
 import os
 import xarray as xr
 import zipfile
 import xml.etree.ElementTree as ET
 from scipy.ndimage import uniform_filter
+from scipy.spatial import cKDTree
 
 from pathlib import Path
 
@@ -180,9 +183,6 @@ class Sentinel1GRDProcessor:
 
         data_vars = {}
 
-        # NEW
-        vv_tiff_path = None  # Track the VV band file path for later use in subsetting
-
         for tiff in tiff_files:
             pols = ["vv", "vh", "hh", "hv"]
             band_name = None
@@ -200,23 +200,7 @@ class Sentinel1GRDProcessor:
                 da = da.squeeze("band", drop=True)
             data_vars[band_name] = da
 
-            # NEW
-            if band_name == "VV":
-                vv_tiff_path = tiff_path
-
         ds = xr.Dataset(data_vars)
-
-        # NEW!
-        # Store the VV TIFF path in attributes (used by subset function)
-        if vv_tiff_path:
-            ds.attrs["vv_tiff_path"] = str(vv_tiff_path)
-
-        # NEW!
-        if vv_tiff_path:
-            with rasterio.open(vv_tiff_path) as src:
-                if src.gcps and len(src.gcps[0]) > 0:
-                    ds.attrs["gcps"] = src.gcps[0]           # list of GCPs
-                    ds.attrs["gcps_crs"] = src.gcps[1] or "EPSG:4326"
                     
         # Find an annotation XML corresponding to the band (e.g., VV)
         # Use the first annotation file that matches the polarization of the bands loaded.
@@ -252,123 +236,122 @@ class Sentinel1GRDProcessor:
 
 
     # ----------- SUBSET TO AOI --------------
-    def subset_aoi(self, ds, bbox: list[float]):
+    def subset_aoi(self, safe_path, ds ,bbox):
         """
-        Subset Sentinel-1 GRD xarray Dataset to  AOI using lon/lat bbox.
-        
-        Features:
-        - Uses GCPs from original TIFF to map bbox corners → pixel range
-        - Subsets ALL bands (VV, VH, etc.) using the same pixel window
-        - Adds rough geographic coordinates (linear interpolation)
-        - Works around common Sentinel-1 GRD affine/GCP issues
-        
+        Subset Sentinel-1 GRD xarray Dataset to AOI using SAR geolocation grid from annotation XML.
+
         Args:
-            ds: xarray.Dataset from read_grd_data (needs 'vv_tiff_path' in attrs)
+            ds: xarray.Dataset with SAR bands (e.g. VV, VH) and dimensions (line, pixel) or (y, x)
             bbox: [min_lon, min_lat, max_lon, max_lat] in EPSG:4326
-        
+            safe_path: path to the Sentinel-1 .SAFE folder
+
         Returns:
-            xr.Dataset: subsetted version with approximate coords
+            xr.Dataset: subsetted dataset
         """
-        # --- check bbox validity ---
-        if len(bbox) != 4:
-            raise ValueError("bbox must be [min_lon, min_lat, max_lon, max_lat]")
+
+        # check .SAFE folder exists and contains annotation XMLs
+        if not os.path.isdir(safe_path):
+            raise ValueError(f"{safe_path} is not a valid folder")
+
+        annotation_files = Path(safe_path).glob("annotation/*.xml")
+        if not any(annotation_files):
+            raise FileNotFoundError(f"No annotation XML found in {safe_path}/annotation/")
         
+        # pick the first XML file 
+        annotation_path = next(annotation_files)
+        print(f"Using annotation XML: {annotation_path}")
+
+        # Parse geolocation grid from annotation XML 
+        tree = ET.parse(annotation_path)
+        root = tree.getroot()
+        
+        points = []
+        for point in root.findall(".//geolocationGridPoint"):
+            points.append({
+                'line': float(point.find("line").text),
+                'pixel': float(point.find("pixel").text),
+                'latitude': float(point.find("latitude").text),
+                'longitude': float(point.find("longitude").text)
+            })
+        
+        lines = sorted(set(p['line'] for p in points))
+        pixels = sorted(set(p['pixel'] for p in points))
+        lat_sparse = np.zeros((len(lines), len(pixels)))
+        lon_sparse = np.zeros((len(lines), len(pixels)))
+        for p in points:
+            i = lines.index(p['line'])
+            j = pixels.index(p['pixel'])
+            lat_sparse[i, j] = p['latitude']
+            lon_sparse[i, j] = p['longitude']
+
+        # Build KDTree
+        n_lines_sparse, n_pixels_sparse = lat_sparse.shape
+        tree = cKDTree(np.column_stack([lat_sparse.ravel(), lon_sparse.ravel()]))
+
+        # Map bbox corners to sparse grid indices
         min_lon, min_lat, max_lon, max_lat = bbox
-        
-        # enforce expected EPSG since GCPs are usually in EPSG:4326 
-        if not (-180 <= min_lon <= 180 and -90 <= min_lat <= 90 and
-                -180 <= max_lon <= 180 and -90 <= max_lat <= 90):
-            raise ValueError(
-                "bbox coordinates are expected in EPSG:4326 (lon/lat). "
-                f"Got {bbox}"
-            )
+        corners = [
+            (min_lat, min_lon),
+            (max_lat, min_lon),
+            (max_lat, max_lon),
+            (min_lat, max_lon)
+        ]
+        lines_sparse_idx, pixels_sparse_idx = [], []
+        for lat, lon in corners:
+            _, idx = tree.query([lat, lon])
+            lines_sparse_idx.append(idx // n_pixels_sparse)
+            pixels_sparse_idx.append(idx % n_pixels_sparse)
 
-        print(f"Subsetting to AOI (EPSG:4326): [{min_lon:.4f}, {min_lat:.4f}, {max_lon:.4f}, {max_lat:.4f}]")
-        
-        # Get TIFF path from attributes
-        tiff_path = ds.attrs.get("vv_tiff_path")
-        if not tiff_path:
-            raise ValueError(
-                "No 'vv_tiff_path' found in ds.attrs.\n"
-                f"Available keys: {list(ds.attrs.keys())}\n"
-                "Make sure read_grd_data stores it as ds.attrs['vv_tiff_path']"
-            )
-        print(f"Using TIFF for geolocation: {tiff_path}")
+        line_start_sparse = min(lines_sparse_idx)
+        line_stop_sparse  = max(lines_sparse_idx)
+        pixel_start_sparse = min(pixels_sparse_idx)
+        pixel_stop_sparse  = max(pixels_sparse_idx)
 
-        # Open TIFF and get GCPs
-        with rasterio.open(tiff_path) as src:
-            if not src.gcps or len(src.gcps[0]) == 0:
-                raise ValueError("No GCPs found in TIFF — cannot estimate subset location")
+        # Detect SAR dimensions
+        if "line" in ds.dims and "pixel" in ds.dims:
+            line_dim, pixel_dim = "line", "pixel"
+        elif "y" in ds.dims and "x" in ds.dims:
+            line_dim, pixel_dim = "y", "x"
+        else:
+            raise ValueError(f"Unknown SAR dimensions: {ds.dims}")
 
-            gcps, gcps_crs = src.gcps
-            gcps_crs = gcps_crs or "EPSG:4326"
+        full_lines = ds.dims[line_dim]
+        full_pixels = ds.dims[pixel_dim]
 
-            # Show approximate scene extent from GCPs (for debugging)
-            lons = [gcp.x for gcp in gcps]
-            lats = [gcp.y for gcp in gcps]
-            print(f"Scene approx lon range (from GCPs): {min(lons):.4f} – {max(lons):.4f}")
-            print(f"Scene approx lat range (from GCPs): {min(lats):.4f} – {max(lats):.4f}")
+        # Scale sparse to full resolution
+        scale_line = full_lines / n_lines_sparse
+        scale_pixel = full_pixels / n_pixels_sparse
+        line_start = int(line_start_sparse * scale_line)
+        line_stop  = int((line_stop_sparse + 1) * scale_line)
+        pixel_start = int(pixel_start_sparse * scale_pixel)
+        pixel_stop  = int((pixel_stop_sparse + 1) * scale_pixel)
 
-            left, bottom, right, top = min_lon, min_lat, max_lon, max_lat
+        # Clamp to dataset bounds
+        line_start = max(0, line_start)
+        pixel_start = max(0, pixel_start)
+        line_stop = min(full_lines, line_stop)
+        pixel_stop = min(full_pixels, pixel_stop)
 
-            # Create approximate affine from GCPs (used only for rowcol)
-            from rasterio.transform import from_gcps
-            approx_transform = from_gcps(gcps)
+        # Subset dataset
+        subset_ds = ds.isel(
+            {line_dim: slice(line_start, line_stop),
+            pixel_dim: slice(pixel_start, pixel_stop)}
+        )
 
-            # Map bbox corners to pixel coordinates
-            corner_lons = [left, right, right, left]
-            corner_lats = [top, top, bottom, bottom]  # top = max lat, bottom = min lat
+        # Rename and assign coords
+        if line_dim == "y" and pixel_dim == "x":
+            subset_ds = subset_ds.rename({"y": "line", "x": "pixel"})
+        subset_ds = subset_ds.assign_coords({
+            "line": np.arange(line_start, line_start + subset_ds.dims["line"]),
+            "pixel": np.arange(pixel_start, pixel_start + subset_ds.dims["pixel"])
+        })
 
-            rows = []
-            cols = []
+        # Store offsets
+        subset_ds.attrs["line_offset"] = line_start
+        subset_ds.attrs["pixel_offset"] = pixel_start
 
-            for lon, lat in zip(corner_lons, corner_lats):
-                try:
-                    row, col = rowcol(
-                        approx_transform,
-                        lon, lat,
-                        precision=0.1,  # tolerance for non-exact fit
-                        op=float
-                    )
-                    rows.append(row)
-                    cols.append(col)
-                except Exception as e:
-                    print(f"Corner ({lon:.4f}, {lat:.4f}) could not be mapped: {e}")
-        if not rows:
-            raise ValueError("None of the bbox corners could be mapped to pixels — likely no overlap")
-
-        # Take min/max row/col
-        row_start = max(0, int(min(rows)))
-        row_stop  = min(src.height, int(max(rows)) + 1)
-        col_start = max(0, int(min(cols)))
-        col_stop  = min(src.width, int(max(cols)) + 1)
-
-        height = row_stop - row_start
-        width  = col_stop - col_start
-
-        # Slice all bands using the computed window
-        subset_vars = {}
-        for band_name in ds.data_vars:
-            subset_da = ds[band_name].isel(
-                y=slice(row_start, row_stop),
-                x=slice(col_start, col_stop)
-            )
-
-            # Rough geographic coordinates (linear from bbox)
-            approx_x = np.linspace(left, right, subset_da.sizes["x"])
-            approx_y = np.linspace(top, bottom, subset_da.sizes["y"])[::-1]  # flip for north-up
-            subset_da = subset_da.assign_coords(x=approx_x, y=approx_y)
-            subset_da = subset_da.rio.write_crs("EPSG:4326")
-
-            subset_vars[band_name] = subset_da
-
-        subset_ds = xr.Dataset(subset_vars)
-        subset_ds.attrs = ds.attrs.copy()
-
-        print(f"subset shape (y, x): {subset_da.sizes['y']}, {subset_da.sizes['x']}")
-
+        print(f"Subset shape (line, pixel): {subset_ds.sizes['line']}, {subset_ds.sizes['pixel']}")
         return subset_ds
-
 
     # ----------- APPLY ORBIT FILE --------------
     def apply_orbit_file(self, ds, safe_folder_path, save_dir, overwrite=True):
