@@ -308,15 +308,15 @@ class Sentinel1GRDProcessor:
         pixel_stop_sparse  = max(pixels_sparse_idx)
 
         # Detect SAR dimensions
-        if "line" in ds.dims and "pixel" in ds.dims:
+        if "line" in ds.sizes and "pixel" in ds.sizes:
             line_dim, pixel_dim = "line", "pixel"
-        elif "y" in ds.dims and "x" in ds.dims:
+        elif "y" in ds.sizes and "x" in ds.sizes:
             line_dim, pixel_dim = "y", "x"
         else:
-            raise ValueError(f"Unknown SAR dimensions: {ds.dims}")
+            raise ValueError(f"Unknown SAR dimensions: {ds.sizes}")
 
-        full_lines = ds.dims[line_dim]
-        full_pixels = ds.dims[pixel_dim]
+        full_lines = ds.sizes[line_dim]
+        full_pixels = ds.sizes[pixel_dim]
 
         # Scale sparse to full resolution
         scale_line = full_lines / n_lines_sparse
@@ -342,8 +342,8 @@ class Sentinel1GRDProcessor:
         if line_dim == "y" and pixel_dim == "x":
             subset_ds = subset_ds.rename({"y": "line", "x": "pixel"})
         subset_ds = subset_ds.assign_coords({
-            "line": np.arange(line_start, line_start + subset_ds.dims["line"]),
-            "pixel": np.arange(pixel_start, pixel_start + subset_ds.dims["pixel"])
+            "line": np.arange(line_start, line_start + subset_ds.sizes["line"]),
+            "pixel": np.arange(pixel_start, pixel_start + subset_ds.sizes["pixel"])
         })
 
         # Store offsets
