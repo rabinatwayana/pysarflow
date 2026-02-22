@@ -222,9 +222,6 @@ def select_burst_with_pol(product, safe_dir, geom, subswath=None, polarization="
     Raises:
         ValueError: If requested polarization is not available
     
-    Example:
-        result = select_burst_with_pol(product, my_point, polarization="VV")
-        print(f"Using {result['polarization']} from {result['band_name']}")
     """
     # Validate polarization input
     valid_pols = ["VV", "VH", "HH", "HV"]
