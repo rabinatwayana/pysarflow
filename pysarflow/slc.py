@@ -206,6 +206,67 @@ def burst_for_geometry(product, safe_dir, geom, subswath=None):
 
     return out
 
+def select_burst_with_pol(product, safe_dir, geom, subswath=None, polarization="VV"):
+    """
+    User-friendly wrapper to select burst information with polarization control.
+    
+    Args:
+        product: Sentinel-1 SAFE product
+        geom: Area of interest (Point, Polygon, bbox tuple, or WKT string)
+        subswath: Optional subswath selection ("IW1", "IW2", or "IW3")
+        polarization: "VV" or "VH" (default: "VV" for InSAR applications)
+    
+    Returns:
+        dict: Burst information including polarization used
+    
+    Raises:
+        ValueError: If requested polarization is not available
+    
+    Example:
+        result = select_burst_with_pol(product, my_point, polarization="VV")
+        print(f"Using {result['polarization']} from {result['band_name']}")
+    """
+    # Validate polarization input
+    valid_pols = ["VV", "VH", "HH", "HV"]
+    pol_upper = polarization.upper()
+    
+    if pol_upper not in valid_pols:
+        raise ValueError(
+            f"Invalid polarization '{polarization}'. "
+            f"Must be one of: {', '.join(valid_pols)}"
+        )
+    
+    # Check what's available in the product
+    all_bands = list(product.getBandNames())
+    available_pols = {}
+    for band in all_bands:
+        for pol in valid_pols:
+            if pol in band.upper():
+                if pol not in available_pols:
+                    available_pols[pol] = []
+                available_pols[pol].append(band)
+    
+    # Check if requested polarization exists
+    if pol_upper not in available_pols:
+        raise ValueError(
+            f"Polarization '{polarization}' not found in product. "
+            f"Available: {', '.join(sorted(available_pols.keys()))}"
+        )
+    
+    print(f"Selecting {pol_upper} polarization from {len(available_pols[pol_upper])} available bands")
+    
+    # Call the original function
+    result = burst_for_geometry(product, safe_dir, geom, subswath)
+    
+    # Verify and annotate result
+    if pol_upper not in result['band_name'].upper():
+        print(f"Warning: Expected {pol_upper} but got {result['band_name']}")
+    
+    result['polarization'] = pol_upper
+    result['available_polarizations'] = list(available_pols.keys())
+    
+    return result
+
 def topsar_split(product, burst_dict, pols=None, output_complex=True):
     """
     Run TOPSAR-Split using burst indices from burst_for_geometry(...).
@@ -1100,5 +1161,4 @@ def plot(
         try:
             p.dispose()
         except Exception:
-
-          
+             pass

@@ -4,10 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pysarflow"
-version = "0.1.0"
+version = "0.1.1"
 description = "An open-source python library for SAR data processing"
 authors = [
-  { name = "Rabina Twayana", email = "rabinatwayana123@gmail.com"}
+  { name = "Rabina Twayana", email = "rabinatwayana123@gmail.com"},
+  { name = "Omowonuola Akintola", email = "wola.akintola@gmail.com"},
+  { name = "Ethel Ogallo", email = "ogalloethel@gmail.com"},
+  { name = "Beatriz Perez", email = "beatriz.bs.peres@gmail.com"}
+
 ]
 license = { text = "MIT" }
 readme = "README.md"
